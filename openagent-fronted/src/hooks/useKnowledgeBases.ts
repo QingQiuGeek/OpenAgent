@@ -1,0 +1,49 @@
+import { useEffect, useState } from "react";
+import {
+  createKnowledgeBase,
+  type CreateKnowledgeBaseRequest,
+  getKnowledgeBases,
+} from "../api/api.ts";
+import type { KnowledgeBase } from "../types";
+import { useAuth } from "../contexts/AuthContext.tsx";
+
+export function useKnowledgeBases() {
+  const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!user) {
+      setKnowledgeBases([]);
+      return;
+    }
+    async function fetchData() {
+      const resp = await getKnowledgeBases();
+      const converted = resp.knowledgeBases.map((kb) => ({
+        knowledgeBaseId: kb.id,
+        name: kb.name,
+        description: kb.description || "",
+      }));
+      setKnowledgeBases(converted);
+    }
+    fetchData().then();
+  }, [user]);
+
+  async function createKnowledgeBaseHandle(
+    request: CreateKnowledgeBaseRequest,
+  ) {
+    await createKnowledgeBase(request);
+    const resp = await getKnowledgeBases();
+    const converted = resp.knowledgeBases.map((kb) => ({
+      knowledgeBaseId: kb.id,
+      name: kb.name,
+      description: kb.description || "",
+    }));
+    setKnowledgeBases(converted);
+  }
+
+  return {
+    knowledgeBases,
+    createKnowledgeBaseHandle,
+  };
+}
+

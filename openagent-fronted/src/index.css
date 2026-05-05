@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+/* SPA：禁止 html/body 出现页面级滚动条 */
+html,
+body {
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Tailwind v4: 必须用 CSS-first 声明，JS config 里的 darkMode:"class" 在 v4 中被忽略 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 主题切换瞬间，给所有元素加一个短暂的颜色过渡，切换完再移除，避免闪光 */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition:
+    background-color 280ms ease,
+    border-color 280ms ease,
+    color 280ms ease,
+    fill 280ms ease,
+    stroke 280ms ease,
+    box-shadow 280ms ease !important;
+  /* 让 transform/动画等保持原样，仅限颜色相关 */
+  transition-property:
+    background-color, border-color, color, fill, stroke, box-shadow !important;
+}
+
+/* 全局深色兜底：让没有显式 dark: 变体的区域也回到灰色而不是纯黑/纯白 */
+html.dark,
+html.dark body {
+  background-color: #27272a; /* zinc-800 */
+  color: #e5e7eb; /* gray-200 */
+}
+
+/* 暗色下批量改写常见硬编码 tailwind 浅色背景 */
+html.dark .bg-white { background-color: #27272a !important; } /* zinc-800 */
+html.dark .bg-slate-50,
+html.dark .bg-gray-50 { background-color: #18181b !important; } /* zinc-900 */
+html.dark .bg-gray-100 { background-color: #3f3f46 !important; } /* zinc-700 */
+html.dark .border-gray-200 { border-color: #3f3f46 !important; }
+html.dark .text-gray-900 { color: #f4f4f5 !important; }
+html.dark .text-gray-700 { color: #d4d4d8 !important; }
+html.dark .text-gray-500 { color: #a1a1aa !important; }
+
+
+/* 修复 Ant Design Tabs 在 flex 布局中的滚动问题 */
+.ant-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ant-tabs-content {
+  height: 100%;
+}
+
+.ant-tabs-tabpane {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 隐藏滚动条但保持滚动功能 */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* 细滚动条：仅在 hover 时显示，平时透明 */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s;
+}
+.scrollbar-thin:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+}
+html.dark .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 明显的粗滚动条：聊天区域用 */
+.scrollbar-thick {
+  scrollbar-width: auto;
+  scrollbar-color: rgba(0, 0, 0, 0.3) rgba(0, 0, 0, 0.05);
+}
+.scrollbar-thick::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+.scrollbar-thick::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+}
+.scrollbar-thick::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 0.2s;
+}
+.scrollbar-thick::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+  background-clip: padding-box;
+}
+html.dark .scrollbar-thick {
+  scrollbar-color: rgba(255, 255, 255, 0.25) rgba(255, 255, 255, 0.05);
+}
+html.dark .scrollbar-thick::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+html.dark .scrollbar-thick::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  background-clip: padding-box;
+}
+html.dark .scrollbar-thick::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+  background-clip: padding-box;
+}
+
+/* highlight.js 代码高亮的容器样式微调 */
+.hljs {
+  padding: 1rem !important;
+  font-size: 13px;
+  line-height: 1.6;
+}
