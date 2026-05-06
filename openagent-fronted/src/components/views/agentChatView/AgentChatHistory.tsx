@@ -193,8 +193,18 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
     const hasNewMessage = messages.length > prevMessagesLengthRef.current;
     prevMessagesLengthRef.current = messages.length;
 
-    // 如果有新消息且用户接近底部，则自动滚动
-    if (hasNewMessage && isNearBottom) {
+    if (!hasNewMessage) return;
+
+    // 用户自己刚发出的新消息 → 强制滚到底部，无视当前滚动位置
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.role === "user") {
+      scrollToBottom();
+      setIsNearBottom(true);
+      return;
+    }
+
+    // 其它新消息（AI 生成）：仅当用户已经在底部附近时才跟随
+    if (isNearBottom) {
       scrollToBottom();
     }
   }, [messages, isNearBottom, scrollToBottom]);

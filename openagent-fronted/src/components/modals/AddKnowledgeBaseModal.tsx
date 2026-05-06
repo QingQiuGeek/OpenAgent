@@ -1,8 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button, Input, Modal } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import { SaveOutlined } from "@ant-design/icons";
-import { type CreateKnowledgeBaseRequest } from "../../api/api.ts";
+import {
+  type CreateKnowledgeBaseRequest,
+  type UpdateKnowledgeBaseRequest,
+} from "../../api/api.ts";
+import type { KnowledgeBase } from "../../types";
 
 interface AddKnowledgeBaseModalProps {
   open: boolean;
@@ -10,28 +14,54 @@ interface AddKnowledgeBaseModalProps {
   createKnowledgeBaseHandle: (
     request: CreateKnowledgeBaseRequest,
   ) => Promise<void>;
+  updateKnowledgeBaseHandle?: (
+    knowledgeBaseId: string,
+    request: UpdateKnowledgeBaseRequest,
+  ) => Promise<void>;
+  editingKnowledgeBase?: KnowledgeBase | null;
 }
 
 const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
   open,
   onClose,
   createKnowledgeBaseHandle,
+  updateKnowledgeBaseHandle,
+  editingKnowledgeBase,
 }) => {
+  const isEditMode = !!editingKnowledgeBase;
+
   const [formData, setFormData] = useState<CreateKnowledgeBaseRequest>({
     name: "",
     description: "",
   });
-  
-  const [createLoading, setCreateLoading] = useState(false);
-  
+
+  const [submitLoading, setSubmitLoading] = useState(false);
+
+  // 编辑模式或弹窗开关变化时同步表单
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        name: editingKnowledgeBase?.name ?? "",
+        description: editingKnowledgeBase?.description ?? "",
+      });
+    }
+  }, [open, editingKnowledgeBase]);
+
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
       return;
     }
-    setCreateLoading(true);
-    
+    setSubmitLoading(true);
+
     try {
-      await createKnowledgeBaseHandle(formData);
+      if (isEditMode && editingKnowledgeBase && updateKnowledgeBaseHandle) {
+        await updateKnowledgeBaseHandle(
+          editingKnowledgeBase.knowledgeBaseId,
+          formData,
+        );
+      } else {
+        await createKnowledgeBaseHandle(formData);
+      }
       // 重置表单
       setFormData({
         name: "",
@@ -39,7 +69,7 @@ const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
       });
       onClose();
     } finally {
-      setCreateLoading(false);
+      setSubmitLoading(false);
     }
   };
 
@@ -56,7 +86,7 @@ const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
     <Modal
       open={open}
       onCancel={handleCancel}
-      title="新建知识库"
+      title={isEditMode ? "编辑知识库" : "新建知识库"}
       footer={null}
       width={600}
       centered
@@ -93,11 +123,11 @@ const AddKnowledgeBaseModal: React.FC<AddKnowledgeBaseModalProps> = ({
           <Button
             type="primary"
             icon={<SaveOutlined />}
-            loading={createLoading}
+            loading={submitLoading}
             onClick={handleSubmit}
             disabled={!formData.name.trim()}
           >
-            创建
+            {isEditMode ? "更新" : "创建"}
           </Button>
         </div>
       </div>

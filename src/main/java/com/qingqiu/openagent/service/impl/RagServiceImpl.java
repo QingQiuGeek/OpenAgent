@@ -3,48 +3,36 @@ package com.qingqiu.openagent.service.impl;
 import com.qingqiu.openagent.mapper.ChunkBgeM3Mapper;
 import com.qingqiu.openagent.model.entity.ChunkBgeM3;
 import com.qingqiu.openagent.service.RagService;
-import lombok.Data;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class RagServiceImpl implements RagService {
 
-    // 封装本地的模型调用
-    private final WebClient webClient;
+    // 由 langchain4j-community-dashscope-spring-boot-starter 根据 yaml
+    // langchain4j.community.dashscope.embedding-model 配置自动装配
+    private final EmbeddingModel embeddingModel;
     private final ChunkBgeM3Mapper chunkBgeM3Mapper;
 
-    public RagServiceImpl(WebClient.Builder builder, ChunkBgeM3Mapper chunkBgeM3Mapper) {
-        this.webClient = builder.baseUrl("http://localhost:11434").build();
+    public RagServiceImpl(EmbeddingModel embeddingModel, ChunkBgeM3Mapper chunkBgeM3Mapper) {
+        this.embeddingModel = embeddingModel;
         this.chunkBgeM3Mapper = chunkBgeM3Mapper;
     }
 
-    @Data
-    private static class EmbeddingResponse {
-        private float[] embedding;
-    }
-
     /**
-     * 依赖本地 Ollama bge-m3向量模型
-     * @param text
-     * @return
+     * 使用 yaml 中配置的向量模型（DashScope text-embedding-v3，1024 维）进行文本向量化
+     * @param text 待向量化文本
+     * @return 向量数组
      */
     private float[] doEmbed(String text) {
-        EmbeddingResponse resp = webClient.post()
-                .uri("/api/embeddings")
-                .bodyValue(Map.of(
-                        "model", "bge-m3",
-                        "prompt", text
-                ))
-                .retrieve()
-                .bodyToMono(EmbeddingResponse.class)
-                .block();
-        Assert.notNull(resp, "Embedding response cannot be null");
-        return resp.getEmbedding();
+        Assert.hasText(text, "Embedding text cannot be empty");
+        Embedding embedding = embeddingModel.embed(text).content();
+        Assert.notNull(embedding, "Embedding response cannot be null");
+        return embedding.vector();
     }
 
     @Override

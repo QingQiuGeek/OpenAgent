@@ -4,6 +4,8 @@ export interface KnowledgeBase {
   knowledgeBaseId: string;
   name: string;
   description: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ToolCall {

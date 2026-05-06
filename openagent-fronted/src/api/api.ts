@@ -348,6 +348,8 @@ export interface KnowledgeBaseVO {
   id: string;
   name: string;
   description?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateKnowledgeBaseRequest {

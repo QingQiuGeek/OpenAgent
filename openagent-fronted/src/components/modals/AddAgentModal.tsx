@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button, Checkbox, Divider, Input, Modal, Select, Slider, Tooltip, message } from "antd";
+import { Button, Checkbox, Divider, Input, Modal, Select, Slider, Tag, Tooltip, message } from "antd";
 import TextArea from "antd/es/input/TextArea";
 import { EllipsisOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import {
@@ -46,7 +46,14 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
   const [selectedKey, setSelectedKey] = useState<string>("base");
 
   // 获取知识库列表
-  const { knowledgeBases } = useKnowledgeBases();
+  const { knowledgeBases, refreshKnowledgeBases } = useKnowledgeBases();
+
+  // 打开弹窗时刷新一次，确保新建/更名后的知识库可见
+  useEffect(() => {
+    if (open) {
+      refreshKnowledgeBases().catch(() => {});
+    }
+  }, [open, refreshKnowledgeBases]);
 
   // 模型列表
   const { models, loading: modelsLoading, createModelHandle, updateModelHandle, deleteModelHandle } = useModels();
@@ -151,7 +158,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
           </div>
         </div>
         <div className="flex-1 h-full relative">
-          <div className="absolute inset-0 px-4 pt-1 pb-16 overflow-y-auto">
+          <div className="absolute inset-0 pl-4 pr-4 pt-1 pb-16 overflow-y-auto">
             {selectedKey === "base" && (
               <div>
                 <div className="mb-3">
@@ -464,7 +471,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
                     工具调用
                   </label>
                   <p className="text-sm text-gray-500 mb-4">
-                    选择智能体可以使用的工具，支持多选
+                    可选工具支持多选；固定工具由系统强制启用，不可取消
                   </p>
                   {tools.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
@@ -472,79 +479,117 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {tools.map((tool) => {
-                        const toolId = tool.name;
-                        const isSelected =
-                          formData.allowedTools?.includes(toolId);
-                        return (
-                          <div
-                            key={toolId}
-                            className={`border rounded-lg p-4 cursor-pointer transition-all hover:border-blue-400 hover:bg-blue-50 ${
-                              isSelected
-                                ? "border-blue-500 bg-blue-50"
-                                : "border-gray-200"
-                            }`}
-                            onClick={() => {
-                              const currentTools = formData.allowedTools || [];
-                              if (isSelected) {
-                                setFormData({
-                                  ...formData,
-                                  allowedTools: currentTools.filter(
-                                    (t) => t !== toolId,
-                                  ),
-                                });
-                              } else {
-                                setFormData({
-                                  ...formData,
-                                  allowedTools: [...currentTools, toolId],
-                                });
-                              }
-                            }}
-                          >
-                            <div className="flex items-start gap-2">
-                              <Checkbox
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  const currentTools =
-                                    formData.allowedTools || [];
-                                  if (e.target.checked) {
-                                    setFormData({
-                                      ...formData,
-                                      allowedTools: [...currentTools, toolId],
-                                    });
-                                  } else {
-                                    setFormData({
-                                      ...formData,
-                                      allowedTools: currentTools.filter(
-                                        (t) => t !== toolId,
-                                      ),
-                                    });
-                                  }
-                                }}
-                                className="mr-3"
-                              />
-                              <div className="flex-1">
-                                <div className="flex items-center mb-1">
-                                  <span className="font-medium text-gray-900">
-                                    {tool.name}
-                                  </span>
+                      {[...tools]
+                        .sort((a, b) => {
+                          // OPTIONAL 在前，FIXED 在后
+                          if (a.type === b.type) return 0;
+                          return a.type === "FIXED" ? 1 : -1;
+                        })
+                        .map((tool) => {
+                          const toolId = tool.name;
+                          const isFixed = tool.type === "FIXED";
+                          const isSelected = isFixed
+                            ? true
+                            : !!formData.allowedTools?.includes(toolId);
+                          const cardClass = isFixed
+                            ? "border rounded-lg p-4 border-gray-200 bg-gray-50 opacity-70 cursor-not-allowed"
+                            : `border rounded-lg p-4 cursor-pointer transition-all hover:border-blue-400 hover:bg-blue-50 ${
+                                isSelected
+                                  ? "border-blue-500 bg-blue-50"
+                                  : "border-gray-200"
+                              }`;
+                          return (
+                            <div
+                              key={toolId}
+                              className={cardClass}
+                              onClick={() => {
+                                if (isFixed) return;
+                                const currentTools =
+                                  formData.allowedTools || [];
+                                if (isSelected) {
+                                  setFormData({
+                                    ...formData,
+                                    allowedTools: currentTools.filter(
+                                      (t) => t !== toolId,
+                                    ),
+                                  });
+                                } else {
+                                  setFormData({
+                                    ...formData,
+                                    allowedTools: [...currentTools, toolId],
+                                  });
+                                }
+                              }}
+                            >
+                              <div className="flex items-start gap-2">
+                                <Checkbox
+                                  checked={isSelected}
+                                  disabled={isFixed}
+                                  onChange={(e) => {
+                                    if (isFixed) return;
+                                    e.stopPropagation();
+                                    const currentTools =
+                                      formData.allowedTools || [];
+                                    if (e.target.checked) {
+                                      setFormData({
+                                        ...formData,
+                                        allowedTools: [
+                                          ...currentTools,
+                                          toolId,
+                                        ],
+                                      });
+                                    } else {
+                                      setFormData({
+                                        ...formData,
+                                        allowedTools: currentTools.filter(
+                                          (t) => t !== toolId,
+                                        ),
+                                      });
+                                    }
+                                  }}
+                                  className="mr-3"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span
+                                      className={`font-medium ${
+                                        isFixed
+                                          ? "text-gray-500"
+                                          : "text-gray-900"
+                                      }`}
+                                    >
+                                      {tool.name}
+                                    </span>
+                                    {isFixed && (
+                                      <Tag
+                                        color="default"
+                                        className="!m-0 !text-[10px] !px-1.5 !py-0 !leading-4"
+                                      >
+                                        固定
+                                      </Tag>
+                                    )}
+                                  </div>
+                                  <p
+                                    className={`text-sm ${
+                                      isFixed
+                                        ? "text-gray-400"
+                                        : "text-gray-600"
+                                    }`}
+                                  >
+                                    {tool.description}
+                                  </p>
                                 </div>
-                                <p className="text-sm text-gray-600">
-                                  {tool.description}
-                                </p>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
                     </div>
                   )}
                 </div>
               </div>
             )}
           </div>
-          <div className="absolute bottom-0 right-0">
+          <div className="absolute bottom-2 right-3 z-10 bg-white rounded-md shadow-sm">
             <Button
               type="primary"
               icon={<SaveOutlined />}

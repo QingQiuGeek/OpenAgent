@@ -36,13 +36,20 @@ const SideMenu: React.FC<SideMenuProps> = () => {
   >(null);
 
   /**
-   * 添加知识库模态框状态
+   * 添加/编辑知识库模态框状态
    */
   const [isAddKnowledgeBaseModalOpen, setIsAddKnowledgeBaseModalOpen] =
     useState(false);
+  const [editingKnowledgeBase, setEditingKnowledgeBase] = useState<
+    import("../types").KnowledgeBase | null
+  >(null);
   const toggleAddKnowledgeBaseModal = () => {
     if (!isAddKnowledgeBaseModalOpen && !requireAuth()) return;
     setIsAddKnowledgeBaseModalOpen(!isAddKnowledgeBaseModalOpen);
+    // 关闭时清理编辑状态
+    if (isAddKnowledgeBaseModalOpen) {
+      setEditingKnowledgeBase(null);
+    }
   };
   const { agents, createAgentHandle, deleteAgentHandle, updateAgentHandle } =
     useAgents();
@@ -54,7 +61,12 @@ const SideMenu: React.FC<SideMenuProps> = () => {
     return "agent";
   });
 
-  const { knowledgeBases, createKnowledgeBaseHandle } = useKnowledgeBases();
+  const {
+    knowledgeBases,
+    createKnowledgeBaseHandle,
+    updateKnowledgeBaseHandle,
+    deleteKnowledgeBaseHandle,
+  } = useKnowledgeBases();
 
   // 处理标签页切换
   const handleTabChange = (key: string) => {
@@ -97,6 +109,11 @@ const SideMenu: React.FC<SideMenuProps> = () => {
           onSelectKnowledgeBase={(knowledgeBaseId) => {
             navigate(`/knowledge-base/${knowledgeBaseId}`);
           }}
+          onEditKnowledgeBase={(kb) => {
+            setEditingKnowledgeBase(kb);
+            setIsAddKnowledgeBaseModalOpen(true);
+          }}
+          onDeleteKnowledgeBase={deleteKnowledgeBaseHandle}
         />
       ),
     },
@@ -141,6 +158,8 @@ const SideMenu: React.FC<SideMenuProps> = () => {
         open={isAddKnowledgeBaseModalOpen}
         onClose={toggleAddKnowledgeBaseModal}
         createKnowledgeBaseHandle={createKnowledgeBaseHandle}
+        updateKnowledgeBaseHandle={updateKnowledgeBaseHandle}
+        editingKnowledgeBase={editingKnowledgeBase}
       />
     </div>
   );

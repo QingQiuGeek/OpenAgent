@@ -6,10 +6,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 @MapperScan("com.qingqiu.openagent.mapper")
-public class OpenChatApplication {
+public class OpenAgentApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(OpenChatApplication.class, args);
+        SpringApplication.run(OpenAgentApplication.class, args);
     }
 
 }

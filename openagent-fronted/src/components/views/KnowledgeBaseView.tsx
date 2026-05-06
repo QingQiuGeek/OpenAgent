@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   Card,
@@ -26,7 +26,8 @@ const { Title, Text, Paragraph } = Typography;
 
 const KnowledgeBaseView: React.FC = () => {
   const { knowledgeBaseId } = useParams<{ knowledgeBaseId?: string }>();
-  const { knowledgeBases } = useKnowledgeBases();
+  const { knowledgeBases, loaded, refreshKnowledgeBases } =
+    useKnowledgeBases();
   const { documents, loading, refreshDocuments, deleteDocument } =
     useDocuments(knowledgeBaseId);
 
@@ -40,6 +41,14 @@ const KnowledgeBaseView: React.FC = () => {
       null
     );
   }, [knowledgeBaseId, knowledgeBases]);
+
+  // 切换到新知识库时，如果当前列表里找不到（可能是其他实例新建的），主动刷新一次
+  useEffect(() => {
+    if (!knowledgeBaseId) return;
+    if (loaded && !currentKnowledgeBase) {
+      refreshKnowledgeBases().catch(() => {});
+    }
+  }, [knowledgeBaseId, loaded, currentKnowledgeBase, refreshKnowledgeBases]);
 
   // 处理文件上传
   const handleUpload: UploadProps["customRequest"] = async (options) => {
@@ -137,6 +146,15 @@ const KnowledgeBaseView: React.FC = () => {
             </div>
           }
         />
+      </div>
+    );
+  }
+
+  // 列表尚未加载完成时显示加载态，避免误判为「不存在」
+  if (!loaded) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center p-6">
+        <Text type="secondary">加载中...</Text>
       </div>
     );
   }

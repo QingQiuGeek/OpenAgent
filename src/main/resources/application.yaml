@@ -1,16 +1,14 @@
 server:
   port: 8080
 spring:
+  profiles:
+    active: local
   application:
     name: openagent
   datasource:
     url: jdbc:postgresql://localhost:5432/openagent?stringtype=unspecified
-    username: postgres
-    password: wz123456
     driver-class-name: org.postgresql.Driver
   mail:
-    username: wzhaust@qq.com
-    password: blfsrvygtmgbcjhd
     host: smtp.qq.com
     port: 465
     default-encoding: UTF-8
@@ -38,6 +36,13 @@ spring:
           max-active: 5
           max-idle: 5
           min-idle: 0
+
+langchain4j:
+  community:
+    dashscope:
+      embedding-model:
+        model-name: text-embedding-v3
+        dimensions: 1024
 
 mybatis-plus:
   configuration:

@@ -28,16 +28,20 @@
     </select>
 
     <select id="selectBySessionIdRecently" resultMap="BaseResultMap">
-        SELECT id,
-               session_id,
-               role,
-               content,
-               metadata::text AS metadata,
-               created_at,
-               updated_at
-        FROM chat_message
-        WHERE session_id = #{sessionId}
-        ORDER BY created_at
-        LIMIT #{limit}
+        SELECT *
+        FROM (
+            SELECT id,
+                   session_id,
+                   role,
+                   content,
+                   metadata::text AS metadata,
+                   created_at,
+                   updated_at
+            FROM chat_message
+            WHERE session_id = #{sessionId}
+            ORDER BY created_at DESC
+            LIMIT #{limit}
+        ) sub
+        ORDER BY created_at ASC
     </select>
 </mapper>

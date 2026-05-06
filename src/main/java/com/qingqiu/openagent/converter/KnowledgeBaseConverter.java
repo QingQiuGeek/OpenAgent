@@ -55,6 +55,8 @@ public class KnowledgeBaseConverter {
                 .userId(dto.getUserId())
                 .name(dto.getName())
                 .description(dto.getDescription())
+                .createdAt(dto.getCreatedAt())
+                .updatedAt(dto.getUpdatedAt())
                 .build();
     }
 

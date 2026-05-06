@@ -1,0 +1,16 @@
+# 模板：复制为 application-local.yaml 并填入真实凭据
+# 该文件已加入 .gitignore，请勿在 application-local.yaml 中提交真实密钥
+
+spring:
+  datasource:
+    username: postgres
+    password: your-db-password
+  mail:
+    username: your-mail@qq.com
+    password: your-smtp-auth-code
+
+langchain4j:
+  community:
+    dashscope:
+      embedding-model:
+        api-key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

@@ -17,9 +17,10 @@ public class ToolController {
 
     private final ToolFacadeService toolFacadeService;
 
-    // 给前端提供的可选的工具列表
+    // 给前端提供的工具列表（包含 FIXED 与 OPTIONAL）
+    // 前端按 type 渲染：FIXED 置灰、强制已选、不可取消；OPTIONAL 可勾选
     @GetMapping
-    public R<List<ITool>> getOptionalTools() {
-        return R.success(toolFacadeService.getOptionalTools());
+    public R<List<ITool>> getAllTools() {
+        return R.success(toolFacadeService.getAllTools());
     }
 }
