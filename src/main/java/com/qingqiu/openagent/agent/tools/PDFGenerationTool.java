@@ -36,11 +36,11 @@ public class PDFGenerationTool implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool("Generate a PDF file with given content")
+    @Tool(name = "pdfGeneration", value = "Generate a PDF file with the given filename and text content, returns the saved file path")
     public String pdfGeneration(
-        @P(value = "the filename of pdf")
+        @P(value = "Filename of the PDF (with .pdf suffix), e.g. report.pdf")
         String fileName,
-        @P(value = "the fileContent of pdf")
+        @P(value = "Plain text content to write into the PDF body")
         String content) {
         String fileDir = FILE_SAVE_DIR + "/pdf";
         String filePath = fileDir + "/" + fileName;

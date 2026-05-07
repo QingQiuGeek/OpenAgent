@@ -30,9 +30,12 @@ public class ResourceDownloadTool implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool("Download resource from a given URL")
-    public String resourceDownloadTool(@P(value = "URL of the resource to download") String url
-        , @P(value = "Name of the file to save the downloaded resource") String fileName) {
+    @Tool(name = "resourceDownload", value = "Download a remote resource (image / pdf / file) by URL and save it locally, returns the saved file path")
+    public String resourceDownloadTool(
+            @P(value = "Full URL of the remote resource to download, including http/https scheme")
+            String url,
+            @P(value = "Local filename to save the downloaded resource as, e.g. image.png")
+            String fileName) {
         String fileDir = FILE_SAVE_DIR + "/download";
         String filePath = fileDir + "/" + fileName;
         try {

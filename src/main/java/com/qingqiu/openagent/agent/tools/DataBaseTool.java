@@ -1,5 +1,6 @@
 package com.qingqiu.openagent.agent.tools;
 
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,11 +13,11 @@ import java.util.List;
 
 @Component
 @Slf4j
-public class DataBaseTools implements ITool {
+public class DataBaseTool implements ITool {
 
     private final JdbcTemplate jdbcTemplate;
 
-    public DataBaseTools(JdbcTemplate jdbcTemplate) {
+    public DataBaseTool(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -35,8 +36,10 @@ public class DataBaseTools implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool(name = "databaseQuery", value = "Execute read-only SQL SELECT query")
-    public String query(String sql) {
+    @Tool(name = "databaseQuery", value = "Execute a read-only SQL SELECT query against PostgreSQL and return formatted rows")
+    public String query(
+            @P(value = "Read-only SELECT SQL statement. Must start with SELECT; INSERT/UPDATE/DELETE/DDL are rejected.")
+            String sql) {
         try {
             String trimmedSql = sql == null ? "" : sql.trim().toUpperCase();
             if (!trimmedSql.startsWith("SELECT")) {

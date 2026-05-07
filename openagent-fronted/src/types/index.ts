@@ -21,9 +21,41 @@ export interface ToolResponse {
   responseData: string;
 }
 
+/** 来源引用条目：网络搜索 / 知识库召回 */
+export interface SourceItem {
+  /** "web" 网络搜索；"kb" 知识库 */
+  type: "web" | "kb";
+  /** 网络搜索：网页标题；知识库：被检索到的文件名/分块标题 */
+  title: string;
+  /** 网络搜索：URL；知识库：可能为空 */
+  url?: string;
+  /** 网络搜索：内容摘要；知识库：分块文本 */
+  content?: string;
+  /** 网络搜索：相关度得分 */
+  score?: number;
+  /** 知识库名称（kb 类型时使用） */
+  kbName?: string;
+}
+
+/** 用户消息附件：上传到 OSS 后的元数据，跟随 message.metadata 一起入库 */
+export interface AttachmentItem {
+  /** OSS 公网访问 URL，可直接下载 / 预览 */
+  url: string;
+  /** 原始文件名 */
+  name: string;
+  /** 字节数 */
+  size?: number;
+  /** MIME 类型，如 image/png */
+  contentType?: string;
+}
+
 export interface ChatMessageVOMetadata {
   toolCalls?: ToolCall[];
   toolResponse?: ToolResponse;
+  /** 来源引用，assistant 终态消息会带 */
+  sources?: SourceItem[];
+  /** 用户消息上传的附件 */
+  attachments?: AttachmentItem[];
 }
 
 export interface ChatMessageVO {

@@ -1,5 +1,8 @@
 package com.qingqiu.openagent.agent;
 
+import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import com.qingqiu.openagent.converter.ChatMessageConverter;
 import com.qingqiu.openagent.message.SseMessage;
 import com.qingqiu.openagent.model.dto.ChatMessageDTO;
@@ -18,6 +21,7 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
@@ -25,7 +29,9 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -86,6 +92,17 @@ public class ChatAgent {
 
     // AI 返回的，已经持久化，但是需要 sse 发给前端的消息
     private final List<ChatMessageDTO> pendingChatMessages = new ArrayList<>();
+
+    // 是否启用深度思考（保留字段，后续接入推理模型时使用）
+    @Setter
+    private boolean deepThink = false;
+
+    // 是否启用联网搜索（仅作日志/标记用，工具注入逻辑在 ChatAgentFactory）
+    @Setter
+    private boolean webSearch = false;
+
+    // 累计的来源引用（web 搜索 + 知识库召回）。每一轮 execute 后追加，下一轮 think 的最终回复会带上。
+    private final List<ChatMessageDTO.Source> accumulatedSources = new ArrayList<>();
 
     public ChatAgent() {
     }
@@ -187,11 +204,18 @@ public class ChatAgent {
                     .build())
                 .toList();
 
+            // 仅在「终态回复」（没有 toolCalls）才附带累计的 sources
+            List<ChatMessageDTO.Source> sourcesForMessage =
+                    assistantMessage.hasToolExecutionRequests()
+                            ? null
+                            : (accumulatedSources.isEmpty() ? null : new ArrayList<>(accumulatedSources));
+
             ChatMessageDTO chatMessageDTO = builder.role(ChatMessageDTO.RoleType.ASSISTANT)
                 .content(assistantMessage.text())
                     .sessionId(this.chatSessionId)
                     .metadata(ChatMessageDTO.MetaData.builder()
-                    .toolCalls(toolCalls)
+                            .toolCalls(toolCalls)
+                            .sources(sourcesForMessage)
                             .build())
                     .build();
             CreateChatMessageResponse chatMessage = chatMessageFacadeService.createChatMessage(chatMessageDTO);
@@ -278,14 +302,17 @@ public class ChatAgent {
 
     // thinkPrompt 应该放到 system 中还是
     private boolean think() {
+        String webSearchHint = webSearch
+                ? "\n- 用户已开启「联网搜索」，遇到时效性、新闻、最新数据等问题时，请优先调用 webSearch 工具获取实时信息，并基于搜索结果回答。"
+                : "";
         String thinkPrompt = """
                 现在你是一个智能的的具体「决策模块」
                 请根据当前对话上下文，决定下一步的动作。
                                 \s
                 【额外信息】
                 - 你目前拥有的知识库列表以及描述：%s
-                - 如果有缺失的上下文时，优先从知识库中进行搜索
-                """.formatted(this.availableKbs);
+                - 如果有缺失的上下文时，优先从知识库中进行搜索%s
+                """.formatted(this.availableKbs, webSearchHint);
 
             List<ChatMessage> requestMessages = new ArrayList<>(this.chatMemory);
             requestMessages.add(SystemMessage.from(thinkPrompt));
@@ -328,10 +355,25 @@ public class ChatAgent {
 
         List<ToolExecutionResultMessage> toolResults = new ArrayList<>();
         for (ToolExecutionRequest request : this.lastAiMessage.toolExecutionRequests()) {
-            String result = toolExecutor.execute(request);
+            String result;
+            try {
+                result = toolExecutor.execute(request);
+            } catch (Exception e) {
+                // 工具执行失败：把错误回传给模型，让它有机会重试或放弃；不要中断整个 agent
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                log.warn("工具调用失败: tool={} args={} reason={}",
+                        request.name(), request.arguments(), cause.getMessage());
+                result = "Tool error: " + cause.getMessage();
+            }
             // langchain4j 要求 text 不能为空，兜底为 "ok"
             if (result == null || result.isBlank()) {
                 result = "ok";
+            }
+            // 提取来源引用
+            try {
+                extractSources(request.name(), result);
+            } catch (Exception e) {
+                log.warn("提取 sources 失败: tool={}", request.name(), e);
             }
             ToolExecutionResultMessage resultMessage = ToolExecutionResultMessage.from(request, result);
             toolResults.add(resultMessage);
@@ -352,6 +394,72 @@ public class ChatAgent {
             this.agentState = AgentState.FINISHED;
             log.info("任务结束");
         }
+    }
+
+    /**
+     * 从工具执行结果中提取「来源引用」累积到 accumulatedSources。
+     * 支持两类工具：
+     *  - webSearch：JSON 形如 {"results":[{"title","url","content","score"}], "images":[...]}
+     *  - KnowledgeTool：JSON 形如 {"kbId","results":[{"content"}]}
+     */
+    private void extractSources(String toolName, String resultJson) {
+        if (toolName == null || resultJson == null) return;
+        if (!JSONUtil.isTypeJSONObject(resultJson)) return;
+        JSONObject json = JSONUtil.parseObj(resultJson);
+
+        if ("webSearch".equals(toolName)) {
+            JSONArray results = json.getJSONArray("results");
+            if (results == null) return;
+            for (int i = 0; i < results.size(); i++) {
+                JSONObject item = results.getJSONObject(i);
+                String url = item.getStr("url", "");
+                if (url.isBlank()) continue;
+                accumulatedSources.add(ChatMessageDTO.Source.builder()
+                        .type("web")
+                        .title(item.getStr("title", url))
+                        .url(url)
+                        .content(item.getStr("content", ""))
+                        .score(item.getDouble("score", 0d))
+                        .build());
+            }
+        } else if ("KnowledgeTool".equals(toolName)) {
+            String kbId = json.getStr("kbId", "");
+            String kbName = lookupKbName(kbId);
+            JSONArray results = json.getJSONArray("results");
+            if (results == null) return;
+            for (int i = 0; i < results.size(); i++) {
+                JSONObject item = results.getJSONObject(i);
+                String content = item.getStr("content", "");
+                if (content.isBlank()) continue;
+                String title = content.length() > 30 ? content.substring(0, 30) + "..." : content;
+                accumulatedSources.add(ChatMessageDTO.Source.builder()
+                        .type("kb")
+                        .title("片段 " + (i + 1) + "：" + title)
+                        .content(content)
+                        .kbName(kbName)
+                        .build());
+            }
+        }
+    }
+
+    private final Map<String, String> kbNameCache = new LinkedHashMap<>();
+
+    private String lookupKbName(String kbId) {
+        if (kbId == null || kbId.isBlank()) return "";
+        if (kbNameCache.containsKey(kbId)) {
+            return kbNameCache.get(kbId);
+        }
+        String name = "";
+        if (availableKbs != null) {
+            for (KnowledgeBaseDTO kb : availableKbs) {
+                if (kbId.equals(kb.getId())) {
+                    name = kb.getName() == null ? "" : kb.getName();
+                    break;
+                }
+            }
+        }
+        kbNameCache.put(kbId, name);
+        return name;
     }
 
     // 单个步骤模板

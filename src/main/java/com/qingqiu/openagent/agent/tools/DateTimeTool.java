@@ -19,7 +19,7 @@ public class DateTimeTool implements ITool {
 
     @Override
     public ToolType getType() {
-        return ToolType.OPTIONAL;
+        return ToolType.FIXED;
     }
 
     @Tool(name = "dateTimeTool", value = "Get current dateTime")

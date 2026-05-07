@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Avatar } from "antd";
+import { Avatar, Image } from "antd";
 import { Bubble } from "@ant-design/x";
 import XMarkdown from "@ant-design/x-markdown";
 import {
@@ -13,6 +13,8 @@ import {
 import type { ChatMessageVO, SseMessageType, ToolCall, ToolResponse } from "../../../types";
 import PreBlock from "./CodeBlock";
 import MessageActions from "./MessageActions";
+import MessageSources from "./MessageSources";
+import MessageAttachments from "./MessageAttachments";
 
 interface AgentChatHistoryProps {
   messages: ChatMessageVO[];
@@ -38,8 +40,51 @@ const USER_AVATAR = (
   </Avatar>
 );
 
-// XMarkdown 自定义组件映射：用 PreBlock 替换 <pre>，实现高亮 + 复制 + mermaid
-const MARKDOWN_COMPONENTS = { pre: PreBlock };
+// 判断 URL 是否为图片：根据扩展名或常见 query 参数特征
+const IMAGE_URL_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?.*)?$/i;
+const isImageUrl = (href?: string) =>
+  !!href && (IMAGE_URL_RE.test(href) || /image\/(png|jpeg|gif|webp)/i.test(href));
+
+// AI 内容里 markdown 的 <img>：用 antd Image，点击原尺寸预览
+const MarkdownImg: React.FC<React.ImgHTMLAttributes<HTMLImageElement>> = ({
+  src,
+  alt,
+  ...rest
+}) => {
+  if (!src) return null;
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      style={{ maxWidth: 480, borderRadius: 8 }}
+      preview={{ src }}
+      {...(rest as Record<string, unknown>)}
+    />
+  );
+};
+
+// AI 内容里 markdown 的 <a>：图片 URL 直接渲染图片，普通 URL 新标签页打开
+const MarkdownAnchor: React.FC<React.AnchorHTMLAttributes<HTMLAnchorElement>> = ({
+  href,
+  children,
+  ...rest
+}) => {
+  if (isImageUrl(href)) {
+    return <MarkdownImg src={href} alt={typeof children === "string" ? children : undefined} />;
+  }
+  return (
+    <a {...rest} href={href} target="_blank" rel="noreferrer noopener">
+      {children}
+    </a>
+  );
+};
+
+// XMarkdown 自定义组件映射：用 PreBlock 替换 <pre>，链接新标签页 + 图片化，图片可大图预览
+const MARKDOWN_COMPONENTS = {
+  pre: PreBlock,
+  a: MarkdownAnchor,
+  img: MarkdownImg,
+};
 
 // AI 气泡样式：去掉默认背景与内边距，直接显示页面底色
 const AI_BUBBLE_STYLES = {
@@ -49,6 +94,11 @@ const AI_BUBBLE_STYLES = {
     boxShadow: "none",
     border: "none",
   } as React.CSSProperties,
+};
+
+// AI 气泡 className：让内容与头像顶端对齐，避免内容短时被居中导致下方空白
+const AI_BUBBLE_CLASSNAMES = {
+  body: "!items-start",
 };
 
 // 工具调用展示组件（简化版，用于 assistant 消息内）
@@ -253,26 +303,48 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
         如需调整，修改此处 class，例如 max-w-3xl(768)、max-w-5xl(1024)、max-w-[960px] 等。
       */}
       <div className="mx-auto max-w-4xl px-6 pt-4">
-      {messages.map((message) => {
+      {messages.map((message, idx) => {
+        const prev = messages[idx - 1];
+        const next = messages[idx + 1];
+        // 是否是「同一轮 AI 回合」的第一条 assistant：
+        // 之前没有消息，或者上一条是 user 消息（开启新一轮）
+        const isFirstAssistantOfTurn =
+          message.role === "assistant" &&
+          (!prev || prev.role === "user");
+        // 是否是「同一轮 AI 回合」的最后一条 assistant：
+        // 下一条是 user 或不存在 → 整个 AI 回合在此终结
+        // 仅在 turn 末尾的 assistant 上才显示操作图标，避免出现在中间
+        const isLastAssistantOfTurn =
+          message.role === "assistant" &&
+          (!next || next.role === "user");
+        // 同一轮内的连续消息（assistant 后续 / tool）行距收紧
+        const isContinuation =
+          (message.role === "assistant" && !isFirstAssistantOfTurn) ||
+          message.role === "tool";
+        const wrapperGapCls = isContinuation
+          ? "mt-1"
+          : message.role === "user"
+          ? "mt-4"
+          : "mt-4";
+        const wrapperBottomCls = "mb-1";
         return (
-          <div className="mb-4 group" key={message.id}>
-            {/* Assistant 消息 */}
-            {message.role === "assistant" && (
+          <div className={`${wrapperGapCls} ${wrapperBottomCls} group`} key={message.id}>
+            {/* Assistant 消息 - 第一条带头像（Bubble），后续不带头像（缩进对齐） */}
+            {message.role === "assistant" && isFirstAssistantOfTurn && (
               <Bubble
                 styles={AI_BUBBLE_STYLES}
+                classNames={AI_BUBBLE_CLASSNAMES}
                 avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
                 content={
                   <div className="w-full min-w-0 max-w-full overflow-x-auto">
-                    {/* 工具调用展示 */}
                     {message.metadata?.toolCalls &&
                       message.metadata.toolCalls.length > 0 && (
-                        <div className="mb-2 flex flex-wrap gap-2">
+                        <div className="mb-1 flex flex-wrap gap-2">
                           {message.metadata.toolCalls.map((toolCall) => (
                             <ToolCallDisplay key={toolCall.id} toolCall={toolCall} />
                           ))}
                         </div>
                       )}
-                    {/* 消息内容 */}
                     {message.content && (
                       <div className="markdown-body min-w-0">
                         <XMarkdown
@@ -283,11 +355,15 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
                         </XMarkdown>
                       </div>
                     )}
+                    {message.metadata?.sources &&
+                      message.metadata.sources.length > 0 && (
+                        <MessageSources sources={message.metadata.sources} />
+                      )}
                   </div>
                 }
                 placement="start"
                 footer={
-                  message.content ? (
+                  message.content && isLastAssistantOfTurn ? (
                     <MessageActions
                       message={message}
                       onDelete={onDeleteMessage}
@@ -299,33 +375,82 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
               />
             )}
 
-            {/* Tool 消息 - 简洁展示，不使用气泡 */}
+            {/* Assistant 消息 - 同一轮内的后续消息，无头像，左缩进 52px 与首条对齐 */}
+            {message.role === "assistant" && !isFirstAssistantOfTurn && (
+              <div className="pl-[52px]">
+                <div className="w-full min-w-0 max-w-full overflow-x-auto">
+                  {message.metadata?.toolCalls &&
+                    message.metadata.toolCalls.length > 0 && (
+                      <div className="mb-1 flex flex-wrap gap-2">
+                        {message.metadata.toolCalls.map((toolCall) => (
+                          <ToolCallDisplay key={toolCall.id} toolCall={toolCall} />
+                        ))}
+                      </div>
+                    )}
+                  {message.content && (
+                    <div className="markdown-body min-w-0">
+                      <XMarkdown
+                        components={MARKDOWN_COMPONENTS}
+                        streaming={{ enableAnimation: false, hasNextChunk: true }}
+                      >
+                        {message.content}
+                      </XMarkdown>
+                    </div>
+                  )}
+                  {message.metadata?.sources &&
+                    message.metadata.sources.length > 0 && (
+                      <MessageSources sources={message.metadata.sources} />
+                    )}
+                  {message.content && isLastAssistantOfTurn && (
+                    <MessageActions
+                      message={message}
+                      onDelete={onDeleteMessage}
+                      onRetry={onRetryMessage}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tool 消息 - 简洁展示，不使用气泡。左缩进 52px 与 AI 文本对齐 */}
             {message.role === "tool" && message.metadata?.toolResponse && (
-              <div className="flex justify-start">
-                <div className="max-w-[85%]">
+              <div className="flex justify-start pl-[52px]">
+                <div className="max-w-[85%] min-w-0">
                   <ToolResponseDisplay toolResponse={message.metadata.toolResponse} />
                 </div>
               </div>
             )}
 
-            {/* User 消息 */}
+            {/* User 消息：附件竖向列在文本上方，头像与文本水平对齐，操作行在文本下方 */}
             {message.role === "user" && (
-              <Bubble
-                avatar={USER_AVATAR}
-                content={
-                  <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
-                    {message.content}
-                  </div>
-                }
-                placement="end"
-                footer={
-                  <MessageActions
-                    message={message}
-                    onDelete={onDeleteMessage}
-                  />
-                }
-                footerPlacement="outer-start"
-              />
+              <div className="flex flex-col items-end">
+                {message.metadata?.attachments &&
+                  message.metadata.attachments.length > 0 && (
+                    // mr-[52px] 让附件列右对齐到 bubble 的右边（避开右侧 40px 头像 + 12px gap）
+                    <div className="mr-[52px] mb-2">
+                      <MessageAttachments
+                        attachments={message.metadata.attachments}
+                      />
+                    </div>
+                  )}
+                <Bubble
+                  avatar={USER_AVATAR}
+                  content={
+                    <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+                      {message.content}
+                    </div>
+                  }
+                  placement="end"
+                  footer={
+                    <MessageActions
+                      message={message}
+                      onDelete={onDeleteMessage}
+                      align="end"
+                    />
+                  }
+                  footerPlacement="outer-start"
+                />
+              </div>
             )}
 
             {/* System 消息 */}
@@ -340,42 +465,48 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
           </div>
         );
       })}
-      {isAgentRunning && !streamingContent && (
-        <div className="mb-4">
-          <Bubble
-            styles={AI_BUBBLE_STYLES}
-            avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
-            content={
-              <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                <LoadingOutlined spin />
-                <span>思考中...</span>
-              </div>
-            }
-            placement="start"
-          />
-        </div>
-      )}
-      {streamingContent && (
-        <div className="mb-4">
-          <Bubble
-            styles={AI_BUBBLE_STYLES}
-            avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
-            content={
-              <div className="w-full min-w-0 max-w-full overflow-x-auto">
-                <div className="markdown-body min-w-0">
-                  <XMarkdown
-                    components={MARKDOWN_COMPONENTS}
-                    streaming={{ enableAnimation: false, hasNextChunk: true }}
-                  >
-                    {streamingContent}
-                  </XMarkdown>
-                </div>
-              </div>
-            }
-            placement="start"
-          />
-        </div>
-      )}
+      {(() => {
+        // 流式块：根据 messages 最后一条决定是否显示头像
+        // - 最后一条是 user 或没有消息：显示头像（开启新一轮 AI 回复）
+        // - 最后一条是 assistant/tool：本轮已经有头像，本块作为延续，不再显示头像
+        const last = messages[messages.length - 1];
+        const isNewTurn = !last || last.role === "user";
+        const showThinking = isAgentRunning && !streamingContent;
+        const showStreaming = !!streamingContent;
+        if (!showThinking && !showStreaming) return null;
+
+        const inner = showStreaming ? (
+          <div className="w-full min-w-0 max-w-full overflow-x-auto">
+            <div className="markdown-body min-w-0">
+              <XMarkdown
+                components={MARKDOWN_COMPONENTS}
+                streaming={{ enableAnimation: false, hasNextChunk: true }}
+              >
+                {streamingContent}
+              </XMarkdown>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+            <LoadingOutlined spin />
+            <span>思考中...</span>
+          </div>
+        );
+
+        return isNewTurn ? (
+          <div className="mt-4 mb-1">
+            <Bubble
+              styles={AI_BUBBLE_STYLES}
+              classNames={AI_BUBBLE_CLASSNAMES}
+              avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
+              content={inner}
+              placement="start"
+            />
+          </div>
+        ) : (
+          <div className="mt-1 mb-1 pl-[52px]">{inner}</div>
+        );
+      })()}
       {displayAgentStatus && (
         <div className="mb-3">
           <div

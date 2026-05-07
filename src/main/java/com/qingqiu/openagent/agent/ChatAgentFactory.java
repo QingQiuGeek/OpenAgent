@@ -99,10 +99,11 @@ public class ChatAgentFactory {
                     memory.add(0, SystemMessage.from(chatMessageDTO.getContent()));
                     break;
                 case USER:
-                    if (!StringUtils.hasLength(chatMessageDTO.getContent())) {
+                    String userContent = buildUserContentWithAttachments(chatMessageDTO);
+                    if (!StringUtils.hasLength(userContent)) {
                         continue;
                     }
-                    memory.add(UserMessage.from(chatMessageDTO.getContent()));
+                    memory.add(UserMessage.from(userContent));
                     break;
                 case ASSISTANT:
                     List<ToolExecutionRequest> requests = new ArrayList<>();
@@ -137,6 +138,53 @@ public class ChatAgentFactory {
             }
         }
         return memory;
+    }
+
+    /**
+     * 把用户消息的 metadata.attachments 拼到 content 后面，让 LLM 能感知到附件。
+     * <p>展示层不变（数据库里 content 仍是用户原文），仅在喂给模型时拼接附件清单。
+     *
+     * <pre>
+     * &lt;原始 content&gt;
+     *
+     * 附件:
+     * - [文件名] (image/png, 1024B): https://oss.../foo.png
+     * - [文件名] (text/plain, 200B): https://oss.../bar.txt
+     * </pre>
+     */
+    private String buildUserContentWithAttachments(ChatMessageDTO dto) {
+        String content = dto.getContent();
+        if (dto.getMetadata() == null || dto.getMetadata().getAttachments() == null
+                || dto.getMetadata().getAttachments().isEmpty()) {
+            return content == null ? "" : content;
+        }
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.hasLength(content)) {
+            sb.append(content).append("\n\n");
+        }
+        sb.append("附件:");
+        for (ChatMessageDTO.Attachment att : dto.getMetadata().getAttachments()) {
+            sb.append("\n- [")
+                    .append(att.getName() == null ? "未命名" : att.getName())
+                    .append("]");
+            if (StringUtils.hasLength(att.getContentType()) || att.getSize() != null) {
+                sb.append(" (");
+                if (StringUtils.hasLength(att.getContentType())) {
+                    sb.append(att.getContentType());
+                }
+                if (att.getSize() != null) {
+                    if (StringUtils.hasLength(att.getContentType())) {
+                        sb.append(", ");
+                    }
+                    sb.append(att.getSize()).append("B");
+                }
+                sb.append(")");
+            }
+            if (StringUtils.hasLength(att.getUrl())) {
+                sb.append(": ").append(att.getUrl());
+            }
+        }
+        return sb.toString();
     }
 
     private AgentDTO toAgentConfig(Agent agent) {
@@ -227,9 +275,12 @@ public class ChatAgentFactory {
     }
 
     /**
-     * 创建一个 OpenAgent 实例
+     * 创建一个 OpenAgent 实例。
+     *
+     * @param deepThink 是否启用深度思考（保留给后续接入推理模型用）
+     * @param webSearch 是否启用联网搜索（true 时把 WebSearchTool 加入运行时工具集）
      */
-    public ChatAgent create(String agentId, String chatSessionId) {
+    public ChatAgent create(String agentId, String chatSessionId, boolean deepThink, boolean webSearch) {
         Agent agent = loadAgent(agentId);
         AgentDTO agentConfig = toAgentConfig(agent);
         List<ChatMessage> memory = loadMemory(chatSessionId);
@@ -238,15 +289,38 @@ public class ChatAgentFactory {
         List<KnowledgeBaseDTO> knowledgeBases = resolveRuntimeKnowledgeBases(agentConfig);
         // 解析 agent 支持的工具调用
         List<ITool> runtimeITools = resolveRuntimeTools(agentConfig);
+
+        // 联网搜索：动态注入 WebSearchTool（如果用户勾选且容器中存在该 bean）
+        if (webSearch) {
+            ITool webSearchTool = toolFacadeService.getAllTools().stream()
+                    .filter(t -> "webSearchTool".equals(t.getName()))
+                    .findFirst()
+                    .orElse(null);
+            if (webSearchTool != null && !runtimeITools.contains(webSearchTool)) {
+                runtimeITools.add(webSearchTool);
+                log.info("[Agent] 已启用联网搜索: sessionId={}", chatSessionId);
+            } else if (webSearchTool == null) {
+                log.warn("[Agent] webSearch=true 但未找到 WebSearchTool bean");
+            }
+        }
+
         // 构建 LangChain4j 工具执行器
         LangChainToolExecutor toolExecutor = buildToolExecutor(runtimeITools);
 
-        return buildAgentRuntime(
+        ChatAgent chatAgent = buildAgentRuntime(
                 agent,
                 memory,
                 knowledgeBases,
-            toolExecutor,
+                toolExecutor,
                 chatSessionId
         );
+        chatAgent.setDeepThink(deepThink);
+        chatAgent.setWebSearch(webSearch);
+        return chatAgent;
+    }
+
+    /** 兼容旧签名 */
+    public ChatAgent create(String agentId, String chatSessionId) {
+        return create(agentId, chatSessionId, false, false);
     }
 }

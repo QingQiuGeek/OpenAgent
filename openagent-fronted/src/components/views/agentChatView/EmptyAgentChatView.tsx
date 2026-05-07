@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
+// useState 仍被 useLoopTypewriter 内部使用
 import { Card, Typography } from "antd";
-import { Sender } from "@ant-design/x";
+import AgentChatInput from "./AgentChatInput";
 import type { AgentVO } from "../../../api/api.ts";
 
 const { Title, Text } = Typography;
@@ -87,8 +88,6 @@ const EmptyAgentChatView: React.FC<DefaultAgentChatViewProps> = ({
   loading,
   handleSendMessage,
 }) => {
-  const [message, setMessage] = useState("");
-
   const typed = useLoopTypewriter(WELCOME_TEXT);
 
   return (
@@ -163,17 +162,9 @@ const EmptyAgentChatView: React.FC<DefaultAgentChatViewProps> = ({
       </div>
       <div className="shrink-0 bg-white dark:bg-zinc-800">
         <div className="px-4 pb-4 pt-4">
-          <Sender
-            value={message}
-            loading={loading}
-            placeholder="输入消息开始对话..."
-            onChange={setMessage}
-            onSubmit={() => {
-              const text = message.trim();
-              if (!text) return;
-              handleSendMessage(text);
-              setMessage("");
-            }}
+          <AgentChatInput
+            isAgentRunning={loading}
+            onSend={(payload) => handleSendMessage(payload.text)}
           />
         </div>
       </div>

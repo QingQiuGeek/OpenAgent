@@ -25,4 +25,9 @@ public interface Common {
   //文件保存目录
   String FILE_SAVE_DIR = System.getProperty("user.dir") + "/tmp";
 
+  /**
+   * 阿里云OSS存储的默认目录前缀
+   */
+  String OSS_UPLOAD_PREFIX = "upload";
+
 }

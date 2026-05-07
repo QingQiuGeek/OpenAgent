@@ -12,12 +12,20 @@ interface MessageActionsProps {
   message: ChatMessageVO;
   onDelete?: (id: string) => void;
   onRetry?: (message: ChatMessageVO) => void;
+  /** 操作行水平对齐：'start' 左对齐（AI），'end' 右对齐（用户） */
+  align?: "start" | "end";
 }
 
+/**
+ * 消息操作行：基于 antd-x {@link Actions}，label 自动作为 tooltip。
+ * 绝对定位 + 父级 h-0：完全脱离布局流，hover 显示时不会撑大气泡宽度，
+ * 也不会把后续消息往下推。
+ */
 const MessageActions: React.FC<MessageActionsProps> = ({
   message,
   onDelete,
   onRetry,
+  align = "start",
 }) => {
   const handleCopy = () => {
     const text = message.content || "";
@@ -31,8 +39,8 @@ const MessageActions: React.FC<MessageActionsProps> = ({
       .catch(() => antdMessage.error("复制失败"));
   };
 
-  // 只有 assistant 消息可以 retry（重新生成）
-  const showRetry = message.role === "assistant" && typeof onRetry === "function";
+  const showRetry =
+    message.role === "assistant" && typeof onRetry === "function";
 
   const items = [
     {
@@ -61,8 +69,14 @@ const MessageActions: React.FC<MessageActionsProps> = ({
   ];
 
   return (
-    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-      <Actions items={items} variant="borderless" />
+    <div className="relative h-0 w-full pointer-events-none">
+      <div
+        className={`hidden group-hover:block absolute top-0.5 whitespace-nowrap pointer-events-auto ${
+          align === "end" ? "right-0" : "left-0"
+        }`}
+      >
+        <Actions items={items} variant="borderless" />
+      </div>
     </div>
   );
 };

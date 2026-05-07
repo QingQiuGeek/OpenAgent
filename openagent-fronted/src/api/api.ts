@@ -288,6 +288,42 @@ export interface CreateChatMessageRequest {
   role: MessageType;
   content: string;
   metadata?: MetaData;
+  /** 是否启用深度思考模式 */
+  deepThink?: boolean;
+  /** 是否启用联网搜索 */
+  webSearch?: boolean;
+}
+
+// =============== 文件上传 ===============
+
+export interface UploadFileResponse {
+  url: string;
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+/**
+ * 上传文件到后端 → OSS，返回公网 URL 与元数据。
+ * 不能复用通用 post()：需要 multipart/form-data 而不是 JSON。
+ */
+export async function uploadFile(file: File): Promise<UploadFileResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch(`${BASE_URL}/api/files/upload`, {
+    method: "POST",
+    body: form,
+    credentials: "include",
+  });
+  if (!resp.ok) {
+    throw new Error(`文件上传失败: HTTP ${resp.status}`);
+  }
+  const json = (await resp.json()) as { code: number; message: string; data: UploadFileResponse };
+  // 后端 R.ApiCode.SUCCESS = 200
+  if (json.code !== 200) {
+    throw new Error(json.message || "文件上传失败");
+  }
+  return json.data;
 }
 
 export interface CreateChatMessageResponse {

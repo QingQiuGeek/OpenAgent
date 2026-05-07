@@ -11,6 +11,7 @@ import {
   getChatMessagesBySessionId,
   getChatSession,
   stopAgent,
+  type UploadFileResponse,
 } from "../../api/api.ts";
 import { useAgents } from "../../hooks/useAgents.ts";
 import { useChatSessions } from "../../hooks/useChatSessions.ts";
@@ -23,7 +24,9 @@ const AgentChatView: React.FC = () => {
   const { chatSessionId } = useParams<{ chatSessionId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as { initMessage?: string } | null;
+  const state = location.state as
+    | { initMessage?: string; initAttachments?: UploadFileResponse[] }
+    | null;
   const [loading, setLoading] = useState(false);
   const { agents } = useAgents();
   const { refreshChatSessions } = useChatSessions();
@@ -78,6 +81,7 @@ const AgentChatView: React.FC = () => {
   // 新建会话后自动发送第一条用户消息
   useEffect(() => {
     const initMsg = state?.initMessage;
+    const initAttachments = state?.initAttachments;
     if (!chatSessionId || !initMsg) return;
     // 清除 location state，防止重复发送
     navigate(location.pathname, { replace: true, state: {} });
@@ -89,6 +93,10 @@ const AgentChatView: React.FC = () => {
       sessionId: chatSessionId,
       role: "user",
       content: initMsg,
+      metadata:
+        initAttachments && initAttachments.length > 0
+          ? { attachments: initAttachments }
+          : undefined,
     })
       .then(() => getChatMessages())
       .catch((err) => {
@@ -98,8 +106,22 @@ const AgentChatView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatSessionId]);
 
-  const handleSendMessage = async (value: string | { text: string }) => {
+  const handleSendMessage = async (
+    value:
+      | string
+      | {
+          text: string;
+          deepThink?: boolean;
+          webSearch?: boolean;
+          /** 已经上传成功的附件元数据（粘贴/选择即上传，发送只携带元数据） */
+          uploadedAttachments?: UploadFileResponse[];
+        },
+  ) => {
     const text = typeof value === "string" ? value : value.text;
+    const deepThink = typeof value === "string" ? false : !!value.deepThink;
+    const webSearch = typeof value === "string" ? false : !!value.webSearch;
+    const uploadedAttachments =
+      typeof value === "string" ? [] : value.uploadedAttachments ?? [];
     if (!text || !text.trim()) return;
 
     if (!user) {
@@ -120,9 +142,13 @@ const AgentChatView: React.FC = () => {
           title: text.slice(0, 20),
         });
         await refreshChatSessions();
+        // 把已上传的附件元数据透传给新会话首条消息（粘贴时已经上传完成）
         navigate(`/chat/${response.chatSessionId}`, {
           replace: true,
-          state: { initMessage: text },
+          state: {
+            initMessage: text,
+            initAttachments: uploadedAttachments,
+          },
         });
       } catch (error) {
         console.error("创建聊天会话失败:", error);
@@ -133,11 +159,18 @@ const AgentChatView: React.FC = () => {
     } else {
       setIsAgentRunning(true);
       try {
+        // 附件已经在粘贴/选择时上传完成，直接挂到 metadata 即可
         await createChatMessage({
           agentId: activeAgentId,
           sessionId: chatSessionId,
           role: "user",
           content: text,
+          deepThink,
+          webSearch,
+          metadata:
+            uploadedAttachments.length > 0
+              ? { attachments: uploadedAttachments }
+              : undefined,
         });
         await getChatMessages();
       } catch (err) {

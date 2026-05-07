@@ -31,6 +31,40 @@ public class ChatMessageDTO {
     public static class MetaData {
         private ToolResponse toolResponse;
         private List<ToolCall> toolCalls;
+        /** 来源引用：assistant 终态消息会附带 web 搜索 / 知识库召回结果 */
+        private List<Source> sources;
+        /** 用户消息附件：上传到 OSS 后的元数据，加载历史时直接用于渲染文件卡片 */
+        private List<Attachment> attachments;
+    }
+
+    @Data
+    @Builder
+    public static class Attachment {
+        /** OSS 公网访问 URL */
+        private String url;
+        /** 原始文件名 */
+        private String name;
+        /** 字节数 */
+        private Long size;
+        /** MIME 类型，如 image/png */
+        private String contentType;
+    }
+
+    @Data
+    @Builder
+    public static class Source {
+        /** "web" 或 "kb" */
+        private String type;
+        /** 标题：网页标题 / 文件名 / 分块标题 */
+        private String title;
+        /** url：网页链接（kb 类型可空） */
+        private String url;
+        /** 内容摘要 / 分块文本 */
+        private String content;
+        /** 网络搜索得分 */
+        private Double score;
+        /** 知识库名（kb 类型用） */
+        private String kbName;
     }
 
     @Data

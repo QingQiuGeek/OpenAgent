@@ -3,15 +3,14 @@ package com.qingqiu.openagent.agent;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qingqiu.openagent.agent.tools.ITool;
-import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agent.tool.ToolSpecifications;
 import org.springframework.aop.support.AopUtils;
 
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.Iterator;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -98,8 +97,7 @@ public class LangChainToolExecutor {
         Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
             Parameter parameter = parameters[i];
-            String paramName = resolveParameterName(parameter);
-            JsonNode valueNode = argsNode.get(paramName);
+            JsonNode valueNode = lookupArgument(argsNode, parameter, i);
 
             if (valueNode == null || valueNode.isNull()) {
                 args[i] = null;
@@ -111,16 +109,33 @@ public class LangChainToolExecutor {
         return args;
     }
 
-    private String resolveParameterName(Parameter parameter) {
-        for (Annotation annotation : parameter.getAnnotations()) {
-            if (annotation.annotationType() == P.class) {
-                P p = (P) annotation;
-                if (p.value() != null && !p.value().isBlank()) {
-                    return p.value();
+    /**
+     * 按参数名（compiler 需 -parameters）查找 JSON 字段；如果取不到，回退到按位置取
+     * （仅当字段顺序与参数顺序一致时生效），最后再尝试 argN / "arg{i}" 命名。
+     * 不再使用 {@code @P.value()} 当字段名 —— 那是参数描述，会被 langchain4j 写入 JSON
+     * Schema 的 {@code description}，不是 JSON key。
+     */
+    private JsonNode lookupArgument(JsonNode argsNode, Parameter parameter, int index) {
+        // 1) 反射拿到的真实形参名
+        String paramName = parameter.getName();
+        JsonNode v = argsNode.get(paramName);
+        if (v != null) return v;
+
+        // 2) 兜底：按位置——argsNode 的第 i 个字段
+        if (argsNode.isObject() && argsNode.size() > index) {
+            Iterator<String> it = argsNode.fieldNames();
+            int k = 0;
+            while (it.hasNext()) {
+                String name = it.next();
+                if (k == index) {
+                    return argsNode.get(name);
                 }
+                k++;
             }
         }
-        return parameter.getName();
+
+        // 3) 兜底：argN 命名（编译时未带 -parameters 的情况）
+        return argsNode.get("arg" + index);
     }
 
     @FunctionalInterface

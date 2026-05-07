@@ -1,5 +1,6 @@
 package com.qingqiu.openagent.agent.tools;
 
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,8 +33,10 @@ public class FileSystemTools implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool(name = "readFile", value = "Read file content")
-    public String readFile(String filePath) {
+    @Tool(name = "readFile", value = "Read the text content of a file under the working directory")
+    public String readFile(
+            @P(value = "Relative path to the file under the working directory, e.g. data/notes.txt")
+            String filePath) {
         try {
             Path path = validateAndResolvePath(filePath);
             if (!Files.exists(path)) {
@@ -49,8 +52,12 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "writeFile", value = "Write content to file")
-    public String writeFile(String filePath, String content) {
+    @Tool(name = "writeFile", value = "Write text content to a file (overwrite). Creates parent directories if missing.")
+    public String writeFile(
+            @P(value = "Relative path to the target file under the working directory")
+            String filePath,
+            @P(value = "Text content to write; existing file will be overwritten")
+            String content) {
         try {
             Path path = validateAndResolvePath(filePath);
             Path parent = path.getParent();
@@ -65,8 +72,12 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "appendToFile", value = "Append content to file")
-    public String appendToFile(String filePath, String content) {
+    @Tool(name = "appendToFile", value = "Append text content to the end of a file. Creates the file if it does not exist.")
+    public String appendToFile(
+            @P(value = "Relative path to the target file under the working directory")
+            String filePath,
+            @P(value = "Text content to append at the end of the file")
+            String content) {
         try {
             Path path = validateAndResolvePath(filePath);
             Path parent = path.getParent();
@@ -81,8 +92,10 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "listFiles", value = "List directory entries")
-    public String listFiles(String directoryPath) {
+    @Tool(name = "listFiles", value = "List the entries (files and subdirectories) under the given directory")
+    public String listFiles(
+            @P(value = "Relative directory path under the working directory; pass empty string to list the working directory itself")
+            String directoryPath) {
         try {
             Path path = (directoryPath == null || directoryPath.isBlank())
                     ? Paths.get(BASE_DIRECTORY)
@@ -107,8 +120,10 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "deleteFile", value = "Delete file or directory")
-    public String deleteFile(String path) {
+    @Tool(name = "deleteFile", value = "Delete a file, or recursively delete a directory and its contents")
+    public String deleteFile(
+            @P(value = "Relative path of the file or directory to delete, under the working directory")
+            String path) {
         try {
             Path filePath = validateAndResolvePath(path);
             if (!Files.exists(filePath)) {
@@ -135,8 +150,10 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "createDirectory", value = "Create directory recursively")
-    public String createDirectory(String directoryPath) {
+    @Tool(name = "createDirectory", value = "Create a directory (recursively, including any missing parent directories)")
+    public String createDirectory(
+            @P(value = "Relative directory path under the working directory to create")
+            String directoryPath) {
         try {
             Path path = validateAndResolvePath(directoryPath);
             if (Files.exists(path) && !Files.isDirectory(path)) {

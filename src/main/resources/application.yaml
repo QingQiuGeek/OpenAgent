@@ -44,6 +44,7 @@ langchain4j:
         model-name: text-embedding-v3
         dimensions: 1024
 
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -76,6 +77,13 @@ sa-token:
 document:
   storage:
     base-path: ./data/documents
+
+# Tavily 联网搜索 / 网页抓取
+# 优先读取环境变量 TAVILY_API_KEY；本地开发可在 application-local.yaml 中覆盖
+tavily:
+  api-key: ${TAVILY_API_KEY:}
+  url: ${TAVILY_URL:https://api.tavily.com/search}
+  extract-url: ${TAVILY_EXTRACT_URL:https://api.tavily.com/extract}
 
 # knife4j的增强配置，不需要增强可以不配
 knife4j:
