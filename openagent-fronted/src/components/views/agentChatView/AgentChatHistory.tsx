@@ -25,11 +25,14 @@ interface AgentChatHistoryProps {
   onRetryMessage?: (message: ChatMessageVO) => void;
 }
 
-// 用户头像（emoji）
+// 头像尺寸常量（用户与 AI 保持一致）
+const AVATAR_SIZE = 40;
+
+// 用户头像（emoji，无背景色）
 const USER_AVATAR = (
   <Avatar
-    size={32}
-    style={{ backgroundColor: "#fde3cf", fontSize: 18 }}
+    size={AVATAR_SIZE}
+    style={{ backgroundColor: "transparent", fontSize: 28, lineHeight: 1 }}
   >
     😃
   </Avatar>
@@ -37,6 +40,16 @@ const USER_AVATAR = (
 
 // XMarkdown 自定义组件映射：用 PreBlock 替换 <pre>，实现高亮 + 复制 + mermaid
 const MARKDOWN_COMPONENTS = { pre: PreBlock };
+
+// AI 气泡样式：去掉默认背景与内边距，直接显示页面底色
+const AI_BUBBLE_STYLES = {
+  content: {
+    background: "transparent",
+    padding: 0,
+    boxShadow: "none",
+    border: "none",
+  } as React.CSSProperties,
+};
 
 // 工具调用展示组件（简化版，用于 assistant 消息内）
 const ToolCallDisplay: React.FC<{ toolCall: ToolCall }> = ({ toolCall }) => {
@@ -246,7 +259,8 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
             {/* Assistant 消息 */}
             {message.role === "assistant" && (
               <Bubble
-                avatar={<Avatar src="/logo.jpg" size={32} />}
+                styles={AI_BUBBLE_STYLES}
+                avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
                 content={
                   <div className="w-full min-w-0 max-w-full overflow-x-auto">
                     {/* 工具调用展示 */}
@@ -260,7 +274,7 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
                       )}
                     {/* 消息内容 */}
                     {message.content && (
-                      <div className="min-w-0">
+                      <div className="markdown-body min-w-0">
                         <XMarkdown
                           components={MARKDOWN_COMPONENTS}
                           streaming={{ enableAnimation: false, hasNextChunk: true }}
@@ -298,7 +312,11 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
             {message.role === "user" && (
               <Bubble
                 avatar={USER_AVATAR}
-                content={message.content}
+                content={
+                  <div className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+                    {message.content}
+                  </div>
+                }
                 placement="end"
                 footer={
                   <MessageActions
@@ -325,7 +343,8 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
       {isAgentRunning && !streamingContent && (
         <div className="mb-4">
           <Bubble
-            avatar={<Avatar src="/logo.jpg" size={32} />}
+            styles={AI_BUBBLE_STYLES}
+            avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
             content={
               <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                 <LoadingOutlined spin />
@@ -339,10 +358,11 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
       {streamingContent && (
         <div className="mb-4">
           <Bubble
-            avatar={<Avatar src="/logo.jpg" size={32} />}
+            styles={AI_BUBBLE_STYLES}
+            avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
             content={
               <div className="w-full min-w-0 max-w-full overflow-x-auto">
-                <div className="min-w-0">
+                <div className="markdown-body min-w-0">
                   <XMarkdown
                     components={MARKDOWN_COMPONENTS}
                     streaming={{ enableAnimation: false, hasNextChunk: true }}
