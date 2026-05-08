@@ -3,9 +3,9 @@ package com.qingqiu.openagent.enums;
 import lombok.Getter;
 
 /**
- *
- * @author
- * @date 2025-12-14
+ * @author: qingqiugeek
+ * @date: 2026/5/3 08:36
+ * @description: ChatEventType
  */
 @Getter
 public enum ChatEventType {

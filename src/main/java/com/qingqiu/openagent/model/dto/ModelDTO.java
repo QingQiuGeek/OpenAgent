@@ -6,6 +6,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/10 10:48
+ * @description: Model DTO
+ */
+
 @Data
 @Builder
 @NoArgsConstructor

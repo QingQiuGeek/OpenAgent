@@ -14,10 +14,9 @@ import org.springframework.stereotype.Service;
 
 
 /**
- * Deepseek服务调用
- *
- * @author xiaoen
- * @date 2026/3/17
+ * @author: qingqiugeek
+ * @date: 2026/5/10 08:17
+ * @description: Deepseek service implementation
  */
 @Service
 @Slf4j

@@ -4,10 +4,9 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 
 /**
- * 按 {@code model.id} 动态解析出一个 {@link ChatModel} 实例。
- *
- * <p>从 {@code model} 表读用户自定义配置并构建；带轻量缓存，{@code updatedAt} 变化时自动失效重建。
- * <strong>modelId 必填</strong>，未绑定或查不到则抛 {@link IllegalStateException}。</p>
+ * @author: qingqiugeek
+ * @date: 2026/5/11 21:58
+ * @description: DynamicChatModel service
  */
 public interface DynamicChatModelService {
 

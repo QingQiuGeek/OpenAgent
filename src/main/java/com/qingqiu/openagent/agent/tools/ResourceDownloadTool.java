@@ -10,7 +10,9 @@ import java.io.File;
 import org.springframework.stereotype.Component;
 
 /**
- * 资源下载工具
+ * @author: qingqiugeek
+ * @date: 2026/5/6 17:46
+ * @description: ResourceDownload agent tool
  */
 @Component
 public class ResourceDownloadTool implements ITool {
@@ -30,7 +32,7 @@ public class ResourceDownloadTool implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool(name = "resourceDownload", value = "Download a remote resource (image / pdf / file) by URL and save it locally, returns the saved file path")
+//    @Tool(name = "resourceDownload", value = "Download a remote resource (image / pdf / file) by URL and save it locally, returns the saved file path")
     public String resourceDownloadTool(
             @P(value = "Full URL of the remote resource to download, including http/https scheme")
             String url,

@@ -4,6 +4,12 @@ import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.springframework.stereotype.Component;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/9 12:13
+ * @description: DirectAnswer agent tool
+ */
+
 @Component
 public class DirectAnswerTool implements ITool {
 

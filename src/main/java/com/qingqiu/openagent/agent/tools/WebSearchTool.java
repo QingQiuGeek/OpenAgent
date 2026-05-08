@@ -13,13 +13,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 联网搜索工具：基于 Tavily Search API。
- * <p>
- * 仅当用户在前端勾选「联网搜索」时，{@code ChatAgentFactory} 会把它加入运行时工具集。
- * 默认 ToolType=OPTIONAL，但不会出现在 agent 配置的 allowed_tools 列表里，
- * 而是由用户在每一次对话临时启用，避免污染普通对话的工具空间。
- *
- * 文档：<a href="https://docs.tavily.com/documentation/api-reference/endpoint/search">Tavily Search API</a>
+ * @author: qingqiugeek
+ * @date: 2026/5/4 09:16
+ * @description: WebSearch agent tool
  */
 @Component
 @Slf4j

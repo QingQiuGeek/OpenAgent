@@ -6,8 +6,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.Set;
 
 /**
- * 用于跨线程通知 ChatAgent 停止当前运行循环。
- * key: chatSessionId
+ * @author: qingqiugeek
+ * @date: 2026/5/2 10:05
+ * @description: AgentStopRegistry
  */
 @Component
 public class AgentStopRegistry {

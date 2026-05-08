@@ -10,6 +10,12 @@ import org.springframework.util.Assert;
 
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/10 18:53
+ * @description: Rag service implementation
+ */
+
 @Service
 public class RagServiceImpl implements RagService {
 

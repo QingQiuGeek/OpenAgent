@@ -12,7 +12,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @TableName knowledge_base
+ * @author: qingqiugeek
+ * @date: 2026/5/2 16:49
+ * @description: KnowledgeBase
  */
 @Data
 @Builder

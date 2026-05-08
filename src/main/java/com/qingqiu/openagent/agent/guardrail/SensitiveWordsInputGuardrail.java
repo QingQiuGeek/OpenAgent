@@ -17,9 +17,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * @author: QingQiu
- * @date: 2025/7/11
- * @description: 敏感词输入检测,Guardrail类似输入拦截器
+ * @author: qingqiugeek
+ * @date: 2026/5/2 13:12
+ * @description: SensitiveWordsInputGuardrail
  */
 @Slf4j
 @Component

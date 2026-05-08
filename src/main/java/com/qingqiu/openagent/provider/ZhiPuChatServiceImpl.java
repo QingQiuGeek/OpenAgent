@@ -11,10 +11,9 @@ import org.springframework.stereotype.Service;
 
 
 /**
- * 智谱 AI 服务调用。
- *
- * <p>当前 pom.xml 未引入 {@code langchain4j-community-zhipu-ai} 依赖；Step 6 会在
- * {@code DynamicChatModelService} 中统一处理 provider_type 分发，此处先占位。</p>
+ * @author: qingqiugeek
+ * @date: 2026/5/4 13:51
+ * @description: ZhiPuChat service implementation
  */
 @Service
 @Slf4j

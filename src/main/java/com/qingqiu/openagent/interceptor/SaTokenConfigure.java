@@ -20,8 +20,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 
 /**
- * [Sa-Token 权限认证] 配置类
- *
+ * @author: qingqiugeek
+ * @date: 2026/5/5 17:04
+ * @description: SaTokenConfigure
  */
 
 @Slf4j

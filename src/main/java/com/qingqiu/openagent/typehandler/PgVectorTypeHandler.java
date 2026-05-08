@@ -8,10 +8,9 @@ import org.apache.ibatis.type.MappedTypes;
 import java.sql.*;
 
 /**
- * 于处理 PostgreSQL 的 pgvector 向量类型与 Java 的 float[] 数组之间的转换
- * 当 MyBatis 执行 SQL 时，自动转换数据类型，避免手动处理，比如：
- * 写入数据库（setNonNullParameter）：将 float[] 转换为 pgvector 字符串格式（如 "[1.0,2.5,3.0]"），然后插入 SQL。
- * 读取数据库（getNullableResult）：将 pgvector 字符串解析为 float[] 数组。
+ * @author: qingqiugeek
+ * @date: 2026/5/1 11:38
+ * @description: PgVectorType handler
  */
 @MappedJdbcTypes(JdbcType.OTHER)
 @MappedTypes(float[].class)

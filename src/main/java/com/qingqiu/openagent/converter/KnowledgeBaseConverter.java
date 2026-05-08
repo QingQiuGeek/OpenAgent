@@ -11,6 +11,12 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/10 10:43
+ * @description: KnowledgeBase converter
+ */
+
 @Component
 @AllArgsConstructor
 public class KnowledgeBaseConverter {

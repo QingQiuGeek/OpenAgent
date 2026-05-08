@@ -7,7 +7,9 @@ import com.qingqiu.openagent.model.response.CreateModelResponse;
 import com.qingqiu.openagent.model.response.GetModelsResponse;
 
 /**
- * 模型管理 Facade。所有操作按登录用户隔离。
+ * @author: qingqiugeek
+ * @date: 2026/5/12 18:34
+ * @description: ModelFacade service
  */
 public interface ModelFacadeService {
 

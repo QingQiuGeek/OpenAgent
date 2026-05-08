@@ -10,7 +10,9 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * @TableName chunk_bge_m3
+ * @author: qingqiugeek
+ * @date: 2026/5/5 10:32
+ * @description: ChunkBgeM3
  */
 @Data
 @Builder

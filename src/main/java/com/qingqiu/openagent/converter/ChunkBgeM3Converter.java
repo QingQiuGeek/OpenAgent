@@ -8,6 +8,12 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/9 08:26
+ * @description: ChunkBgeM3 converter
+ */
+
 @Component
 @AllArgsConstructor
 public class ChunkBgeM3Converter {

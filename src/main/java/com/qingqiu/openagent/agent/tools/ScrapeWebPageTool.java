@@ -13,16 +13,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 网页抓取工具：基于 Tavily Extract API。
- * <p>
- * 文档：<a href="https://docs.tavily.com/documentation/api-reference/endpoint/extract">Tavily Extract API</a>
- * <p>
- * 相对于直接 Jsoup 抓取，Tavily Extract 的优势：
- * <ul>
- *   <li>自动处理反爬 / JS 渲染 / 重定向</li>
- *   <li>返回干净的 markdown / text，避免大段 HTML 噪声占用 token</li>
- *   <li>支持 advanced 深度抽取与图片抓取</li>
- * </ul>
+ * @author: qingqiugeek
+ * @date: 2026/5/8 14:28
+ * @description: ScrapeWebPage agent tool
  */
 @Component
 @Slf4j

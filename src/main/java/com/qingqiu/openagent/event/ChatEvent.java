@@ -4,6 +4,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/11 10:13
+ * @description: ChatEvent
+ */
+
 @Data
 @Builder
 @AllArgsConstructor

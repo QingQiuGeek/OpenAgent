@@ -5,6 +5,12 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/4 12:26
+ * @description: ChatSession DTO
+ */
+
 @Data
 @Builder
 public class ChatSessionDTO {

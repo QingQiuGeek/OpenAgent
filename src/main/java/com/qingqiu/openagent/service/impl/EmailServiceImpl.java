@@ -8,6 +8,12 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/6 08:06
+ * @description: Email service implementation
+ */
+
 @Slf4j
 @Service
 public class EmailServiceImpl implements EmailService {

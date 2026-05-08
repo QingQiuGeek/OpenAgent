@@ -8,10 +8,9 @@ import org.apache.ibatis.annotations.Param;
 import java.util.List;
 
 /**
- * @author charon
- * @description 针对表【chunk_bge_m3】的数据库操作Mapper
- * @createDate 2025-12-02 15:44:34
- * @Entity com.qingqiu.OpenAgent.model.entity.ChunkBgeM3
+ * @author: qingqiugeek
+ * @date: 2026/5/2 22:19
+ * @description: ChunkBgeM3 MyBatis mapper
  */
 @Mapper
 public interface ChunkBgeM3Mapper extends BaseMapper<ChunkBgeM3> {

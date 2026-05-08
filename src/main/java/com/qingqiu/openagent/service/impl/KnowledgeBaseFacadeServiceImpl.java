@@ -21,6 +21,12 @@ import java.util.List;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/5 16:14
+ * @description: KnowledgeBaseFacade service implementation
+ */
+
 @Service
 @AllArgsConstructor
 public class KnowledgeBaseFacadeServiceImpl implements KnowledgeBaseFacadeService {

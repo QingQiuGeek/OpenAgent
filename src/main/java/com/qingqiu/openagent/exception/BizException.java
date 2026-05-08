@@ -2,6 +2,12 @@ package com.qingqiu.openagent.exception;
 
 import lombok.Getter;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/5 14:37
+ * @description: Biz exception
+ */
+
 @Getter
 public class BizException extends RuntimeException {
 

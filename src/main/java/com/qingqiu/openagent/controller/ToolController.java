@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/8 09:17
+ * @description: Tool controller
+ */
+
 @RestController
 @RequestMapping("/api/tools")
 @AllArgsConstructor

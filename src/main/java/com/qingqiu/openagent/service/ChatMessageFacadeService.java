@@ -8,6 +8,12 @@ import com.qingqiu.openagent.model.response.GetChatMessagesResponse;
 
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/4 18:04
+ * @description: ChatMessageFacade service
+ */
+
 public interface ChatMessageFacadeService {
     GetChatMessagesResponse getChatMessagesBySessionId(String sessionId);
 

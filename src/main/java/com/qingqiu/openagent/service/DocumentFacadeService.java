@@ -6,6 +6,12 @@ import com.qingqiu.openagent.model.response.CreateDocumentResponse;
 import com.qingqiu.openagent.model.response.GetDocumentsResponse;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/2 13:17
+ * @description: DocumentFacade service
+ */
+
 public interface DocumentFacadeService {
     GetDocumentsResponse getDocuments();
 

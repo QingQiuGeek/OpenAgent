@@ -12,7 +12,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @TableName chat_session
+ * @author: qingqiugeek
+ * @date: 2026/5/10 15:00
+ * @description: ChatSession
  */
 @Data
 @Builder

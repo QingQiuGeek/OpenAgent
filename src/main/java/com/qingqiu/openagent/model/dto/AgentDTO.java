@@ -7,6 +7,12 @@ import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/1 21:14
+ * @description: Agent DTO
+ */
+
 @Data
 @Builder
 public class AgentDTO {

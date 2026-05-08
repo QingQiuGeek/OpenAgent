@@ -9,7 +9,9 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
- * 简易邮件发送工具，复用现有的 {@link JavaMailSenderImpl}。
+ * @author: qingqiugeek
+ * @date: 2026/5/10 08:53
+ * @description: Mail utility class
  */
 @Slf4j
 public class MailUtil {

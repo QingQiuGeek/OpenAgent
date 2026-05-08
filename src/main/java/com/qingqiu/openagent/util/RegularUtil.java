@@ -3,7 +3,9 @@ package com.qingqiu.openagent.util;
 import java.util.regex.Pattern;
 
 /**
- * 常用正则校验工具。方法语义：校验失败返回 true（配合 {@code !isXxx} 风格判空后取反，沿用历史风格）。
+ * @author: qingqiugeek
+ * @date: 2026/5/12 15:26
+ * @description: Regular utility class
  */
 public final class RegularUtil {
 

@@ -3,6 +3,12 @@ package com.qingqiu.openagent.model.vo;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/12 19:26
+ * @description: Document view object
+ */
+
 @Data
 @Builder
 public class DocumentVO {

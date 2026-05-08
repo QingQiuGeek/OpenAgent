@@ -5,6 +5,12 @@ import lombok.Data;
 
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/2 12:27
+ * @description: CreateAgent request payload
+ */
+
 @Data
 public class CreateAgentRequest {
     private String name;

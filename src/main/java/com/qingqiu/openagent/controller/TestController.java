@@ -6,6 +6,12 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/9 11:00
+ * @description: Test controller
+ */
+
 @RestController
 @AllArgsConstructor
 public class TestController {

@@ -34,9 +34,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 /**
- * @author Qing Qiu
- * @description
- * @createDate
+ * @author: qingqiugeek
+ * @date: 2026/5/7 13:15
+ * @description: User service implementation
  */
 @Service
 @Slf4j

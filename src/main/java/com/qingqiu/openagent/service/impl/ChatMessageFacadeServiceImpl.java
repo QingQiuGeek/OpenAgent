@@ -25,6 +25,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/7 22:11
+ * @description: ChatMessageFacade service implementation
+ */
+
 @Service
 @AllArgsConstructor
 public class ChatMessageFacadeServiceImpl implements ChatMessageFacadeService {

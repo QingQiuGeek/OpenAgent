@@ -15,10 +15,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Set;
 
 /**
- * 通用文件上传接口：将客户端上传的文件转存到 OSS，返回公网 URL 与元数据。
- * <p>
- * 前端在创建包含附件的聊天消息前调用此接口，把得到的 URL/元数据
- * 写入 {@code message.metadata.attachments}，跟消息一起入库。
+ * @author: qingqiugeek
+ * @date: 2026/5/4 18:18
+ * @description: File controller
  */
 @RestController
 @RequestMapping("/api/files")

@@ -9,7 +9,9 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * @TableName chat_message
+ * @author: qingqiugeek
+ * @date: 2026/5/9 08:34
+ * @description: Chat message
  */
 @Data
 @Builder

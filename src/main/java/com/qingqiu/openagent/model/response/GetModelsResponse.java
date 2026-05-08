@@ -7,6 +7,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/6 11:48
+ * @description: GetModels response payload
+ */
+
 @Data
 @Builder
 @NoArgsConstructor

@@ -7,10 +7,9 @@ import org.apache.ibatis.annotations.Mapper;
 import java.util.List;
 
 /**
- * @author charon
- * @description 针对表【chat_message】的数据库操作Mapper
- * @createDate 2025-12-02 15:40:13
- * @Entity com.qingqiu.OpenAgent.model.entity.ChatMessage
+ * @author: qingqiugeek
+ * @date: 2026/5/1 08:08
+ * @description: ChatMessage MyBatis mapper
  */
 @Mapper
 public interface ChatMessageMapper extends BaseMapper<ChatMessage> {

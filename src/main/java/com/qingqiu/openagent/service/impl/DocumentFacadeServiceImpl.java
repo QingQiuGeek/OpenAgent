@@ -34,6 +34,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/5 10:41
+ * @description: DocumentFacade service implementation
+ */
+
 @Service
 @AllArgsConstructor
 @Slf4j

@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 /**
- * 文档存储服务接口
+ * @author: qingqiugeek
+ * @date: 2026/5/2 17:50
+ * @description: DocumentStorage service
  */
 public interface DocumentStorageService {
     /**

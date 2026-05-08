@@ -24,6 +24,12 @@ import java.util.List;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/1 10:58
+ * @description: ChatSessionFacade service implementation
+ */
+
 @Service
 @AllArgsConstructor
 public class ChatSessionFacadeServiceImpl implements ChatSessionFacadeService {

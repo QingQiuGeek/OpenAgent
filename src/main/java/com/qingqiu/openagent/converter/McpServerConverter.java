@@ -7,6 +7,12 @@ import com.qingqiu.openagent.model.vo.McpServerVO;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/4 17:03
+ * @description: McpServer converter
+ */
+
 @Component
 public class McpServerConverter {
 

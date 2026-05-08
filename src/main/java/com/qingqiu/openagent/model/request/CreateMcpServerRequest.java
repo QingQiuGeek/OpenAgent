@@ -2,6 +2,12 @@ package com.qingqiu.openagent.model.request;
 
 import lombok.Data;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/1 20:36
+ * @description: CreateMcpServer request payload
+ */
+
 @Data
 public class CreateMcpServerRequest {
 

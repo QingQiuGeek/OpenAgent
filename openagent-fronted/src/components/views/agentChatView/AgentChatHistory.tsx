@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Avatar, Image } from "antd";
+import { Avatar } from "antd";
 import { Bubble } from "@ant-design/x";
 import XMarkdown from "@ant-design/x-markdown";
 import {
@@ -45,24 +45,38 @@ const IMAGE_URL_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?.*)?$/i;
 const isImageUrl = (href?: string) =>
   !!href && (IMAGE_URL_RE.test(href) || /image\/(png|jpeg|gif|webp)/i.test(href));
 
-// AI 内容里 markdown 的 <img>：用 antd Image，点击原尺寸预览。
+// AI 内容里 markdown 的 <img>：用原生 <img>，保证右键「图片另存为 / 复制图片」可用。
+// （antd Image 会包一层 wrapper + mask 浮层，右键经常落在 wrapper 上 → 只能保存为 HTML。）
 // referrerPolicy="no-referrer" 用于规避 Chrome ORB（Opaque Response Blocking）：
-// 像 pollinations.ai 这类三方图床在带 Referer 跨站请求时会被浏览器以 ERR_BLOCKED_BY_ORB 拦截，
-// 显示为「图片加载失败」。去掉 referer 即可正常加载。
-const MarkdownImg: React.FC<React.ImgHTMLAttributes<HTMLImageElement>> = ({
-  src,
-  alt,
-  ...rest
-}) => {
+// 像 pollinations.ai 这类三方图床在带 Referer 跨站请求时会被浏览器以 ERR_BLOCKED_BY_ORB 拦截。
+const MarkdownImg: React.FC<
+  React.ImgHTMLAttributes<HTMLImageElement> & { children?: React.ReactNode }
+> = (props) => {
+  // XMarkdown / react-markdown 会塞 children、node、domNode、streamStatus 等非 DOM 属性，
+  // 不能透传到原生 <img>（img 是 void 元素，禁止 children；其它会触发 React 警告）。
+  const {
+    src,
+    alt,
+    style,
+    children: _children,
+    // @ts-expect-error markdown 渲染器可能塞入这些非标准 prop
+    node: _node,
+    // @ts-expect-error 同上
+    domNode: _domNode,
+    // @ts-expect-error 同上
+    streamStatus: _streamStatus,
+    ...rest
+  } = props;
   if (!src) return null;
   return (
-    <Image
+    <img
       src={src}
       alt={alt}
       referrerPolicy="no-referrer"
-      style={{ maxWidth: 480, borderRadius: 8 }}
-      preview={{ src }}
-      {...(rest as Record<string, unknown>)}
+      loading="lazy"
+      onClick={() => window.open(src, "_blank", "noopener,noreferrer")}
+      style={{ maxWidth: 480, borderRadius: 8, cursor: "zoom-in", ...style }}
+      {...rest}
     />
   );
 };

@@ -35,6 +35,12 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/7 22:26
+ * @description: ChatAgent factory
+ */
+
 @Component
 public class ChatAgentFactory {
 

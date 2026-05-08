@@ -12,7 +12,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 提供可用的模型提供商（ChatModeType）枚举给前端下拉展示。
+ * @author: qingqiugeek
+ * @date: 2026/5/1 16:54
+ * @description: ProviderType controller
  */
 @RestController
 @RequestMapping("/api/provider-types")

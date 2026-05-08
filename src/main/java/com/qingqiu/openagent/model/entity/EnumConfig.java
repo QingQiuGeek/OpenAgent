@@ -11,9 +11,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @TableName enum_config
- * <p>系统枚举字典（如 model_provider_type、agent_status）。Step 8 仅预埋实体 + Mapper，
- * 暂不接入业务，需要时再补 Service/Controller。</p>
+ * @author: qingqiugeek
+ * @date: 2026/5/2 18:09
+ * @description: Enum configuration
  */
 @Data
 @Builder

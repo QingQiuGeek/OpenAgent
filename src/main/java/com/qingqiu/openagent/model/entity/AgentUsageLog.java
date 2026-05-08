@@ -10,8 +10,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @TableName agent_usage_log
- * <p>Agent 调用日志（Step 9 仅建表 + 实体 + Mapper，业务写入链路留待后续）。</p>
+ * @author: qingqiugeek
+ * @date: 2026/5/5 13:47
+ * @description: AgentUsageLog
  */
 @Data
 @Builder

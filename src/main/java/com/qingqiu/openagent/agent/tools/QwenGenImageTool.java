@@ -1,46 +1,31 @@
 package com.qingqiu.openagent.agent.tools;
 
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversation;
 import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationOutput;
-import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationOutput.Choice;
 import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationParam;
 import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationResult;
 import com.alibaba.dashscope.common.MultiModalMessage;
 import com.alibaba.dashscope.common.Role;
-import com.alibaba.dashscope.exception.NoApiKeyException;
-import com.alibaba.dashscope.exception.UploadFileException;
-import com.alibaba.dashscope.utils.JsonUtils;
 import com.qingqiu.openagent.enums.BizExceptionEnum;
 import com.qingqiu.openagent.exception.BizException;
+import com.qingqiu.openagent.util.OSSUtil;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import dev.langchain4j.community.model.dashscope.WanxImageModel;
-import dev.langchain4j.community.model.dashscope.WanxImageSize;
-import dev.langchain4j.data.image.Image;
-import dev.langchain4j.model.output.Response;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 通义千问（DashScope qwen 系列）文生图工具。
- * <p>相较于免费的 Pollinations，千问在结构、中文语义与画面质量上一般更佳，适合付费场景。</p>
- *
- * <h3>API Key 配置</h3>
- * <pre>
- * # application.yaml 或 application-local.yaml
- * dashscope:
- *   api-key: ${DASHSCOPE_API_KEY:}   # 推荐走环境变量
- * </pre>
- * 代码会优先用上述配置；为空时退化到 SDK 默认（读环境变量 {@code DASHSCOPE_API_KEY}）。
- * 申请 Key：https://bailian.console.aliyun.com/?tab=model#/api-key
+ * @author: qingqiugeek
+ * @date: 2026/5/8 08:25
+ * @description: QwenGenImage agent tool
  */
 @Slf4j
 @Component
@@ -116,12 +101,40 @@ public class QwenGenImageTool implements ITool {
     try {
       MultiModalConversationResult result = conv.call(param);
       MultiModalConversationOutput output = result.getOutput();
-      if(output == null){
-        throw new BizException(BizExceptionEnum.REQUEST_ERROR.getCode(),BizExceptionEnum.REQUEST_ERROR.getMessage());
+      if (output == null) {
+        throw new BizException(BizExceptionEnum.REQUEST_ERROR.getCode(),
+            BizExceptionEnum.REQUEST_ERROR.getMessage());
       }
-      return output.getChoices().get(0).getMessage().getContent().get(0).get("image").toString();
+      String upstreamUrl = output.getChoices().get(0).getMessage().getContent().get(0)
+          .get("image").toString();
+      log.info("[QwenGenImageTool] upstream={}", upstreamUrl);
+
+      // 上游 URL 是带签名的临时链接（24h 后失效），转存到自己的 OSS 拿永久 URL
+      String ossUrl = transferToOssQuietly(upstreamUrl);
+      String md = "![" + prompt.trim() + "](" + ossUrl + ")";
+      return md
+          + "\n\nINSTRUCTION FOR THE ASSISTANT: copy the line above (the `![...](...)` markdown) "
+          + "verbatim into your final answer to the user, then add any extra description you like.";
+    } catch (BizException be) {
+      throw be;
     } catch (Exception e) {
-      throw new BizException(BizExceptionEnum.REQUEST_ERROR.getCode(),e.getMessage());
+      log.error("[QwenGenImageTool] generate failed", e);
+      throw new BizException(BizExceptionEnum.REQUEST_ERROR.getCode(), e.getMessage());
+    }
+  }
+
+  /**
+   * 把上游临时图片链接转存到自己的 OSS，路径规则：
+   * <pre>upload/generate-image/yyyy-MM-dd-HH-mm-ss/{ts}_{random}.{ext}</pre>
+   * 转存失败时降级返回原始 URL（仍可在有效期内访问），保证流程不中断。
+   */
+  static String transferToOssQuietly(String upstreamUrl) {
+    try {
+      String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss"));
+      return OSSUtil.uploadFromUrl(upstreamUrl, "generate-image/" + ts);
+    } catch (Exception ex) {
+      log.warn("[QwenGenImageTool] OSS 转存失败，降级返回上游 URL: {}", ex.getMessage());
+      return upstreamUrl;
     }
   }
 }

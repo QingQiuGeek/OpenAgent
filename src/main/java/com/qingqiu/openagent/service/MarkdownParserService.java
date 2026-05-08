@@ -8,7 +8,9 @@ import java.io.InputStream;
 import java.util.List;
 
 /**
- * Markdown 解析服务接口
+ * @author: qingqiugeek
+ * @date: 2026/5/4 16:32
+ * @description: MarkdownParser service
  */
 public interface MarkdownParserService {
     /**

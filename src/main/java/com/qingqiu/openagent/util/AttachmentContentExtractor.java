@@ -19,17 +19,9 @@ import java.net.URI;
 import java.util.Set;
 
 /**
- * 附件内容提取器：从 OSS URL 下载文件，用 Apache Tika 解析出纯文本，供 LLM 理解文件内容。
- *
- * <p>安全策略：
- * <ul>
- *   <li>仅允许 HTTPS 协议（防止 SSRF 明文探测）</li>
- *   <li>下载上限 {@value MAX_DOWNLOAD_BYTES} 字节，防止超大文件耗尽内存</li>
- *   <li>提取文本上限 {@value MAX_TEXT_CHARS} 字符，防止 LLM context 溢出</li>
- *   <li>拒绝解析可执行/二进制类型（黑名单 MIME）</li>
- *   <li>图片 / 视频 / 音频跳过（Tika 无法提取有效文本，直接标注为"图片附件"）</li>
- *   <li>Tika 本身只做文本提取，不执行任何嵌入脚本或宏</li>
- * </ul>
+ * @author: qingqiugeek
+ * @date: 2026/5/5 22:49
+ * @description: AttachmentContentExtractor
  */
 @Component
 public class AttachmentContentExtractor {

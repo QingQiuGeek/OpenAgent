@@ -1,8 +1,9 @@
 package com.qingqiu.openagent.util;
 
 /**
- * 登录用户上下文（线程局部变量）。由 {@link com.qingqiu.openagent.interceptor.SaTokenInterceptor} 注入，
- * 业务层使用 {@link #getUser()} 获取当前登录用户 id。
+ * @author: qingqiugeek
+ * @date: 2026/5/12 08:41
+ * @description: UserContext
  */
 public final class UserContext {
 

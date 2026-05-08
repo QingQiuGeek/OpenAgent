@@ -9,7 +9,9 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
- * 字典访问工具（Step 8 预埋）。内存缓存 + 懒加载，调用 {@link #refresh()} 可清缓存强制重查。
+ * @author: qingqiugeek
+ * @date: 2026/5/1 15:15
+ * @description: EnumConfigHelper
  */
 @Component
 @AllArgsConstructor

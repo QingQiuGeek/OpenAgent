@@ -9,7 +9,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
 /**
- * {@link Model} 实体 ↔ DTO/VO/Request 的转换器。遵循项目 Converter 规范。
+ * @author: qingqiugeek
+ * @date: 2026/5/7 20:34
+ * @description: Model converter
  */
 @Component
 public class ModelConverter {

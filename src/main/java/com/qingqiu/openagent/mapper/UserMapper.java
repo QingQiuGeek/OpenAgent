@@ -5,7 +5,9 @@ import com.qingqiu.openagent.model.entity.User;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 用户 Mapper。基于 MyBatis-Plus BaseMapper，使用逻辑删除字段 {@code is_deleted}。
+ * @author: qingqiugeek
+ * @date: 2026/5/6 12:26
+ * @description: User MyBatis mapper
  */
 @Mapper
 public interface UserMapper extends BaseMapper<User> {

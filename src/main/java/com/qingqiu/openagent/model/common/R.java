@@ -4,6 +4,12 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.Getter;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/7 19:36
+ * @description: R
+ */
+
 @Data
 public class R<T> {
 

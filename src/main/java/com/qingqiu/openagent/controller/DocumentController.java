@@ -10,6 +10,12 @@ import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/11 13:18
+ * @description: Document controller
+ */
+
 @RestController
 @RequestMapping("/api/documents")
 @AllArgsConstructor

@@ -10,6 +10,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/7 11:36
+ * @description: GlobalException handler
+ */
+
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {

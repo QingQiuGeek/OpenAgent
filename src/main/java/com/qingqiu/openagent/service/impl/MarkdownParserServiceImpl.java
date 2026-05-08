@@ -17,6 +17,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/11 15:43
+ * @description: MarkdownParser service implementation
+ */
+
 @Service
 @Slf4j
 public class MarkdownParserServiceImpl implements MarkdownParserService {

@@ -4,9 +4,9 @@ package com.qingqiu.openagent.enums;
 import lombok.Getter;
 
 /**
- * @author: qing qiu
- * @date: 2024/9/12 23:08
- * @description: chatMessage枚举
+ * @author: qingqiugeek
+ * @date: 2026/5/3 16:00
+ * @description: ChatMessage enum
  */
 
 @Getter

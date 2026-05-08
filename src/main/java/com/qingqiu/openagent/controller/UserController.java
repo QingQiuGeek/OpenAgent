@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * @author: QingQiu
- * @date: 2025/7/15 23:34
- * @description:
+ * @author: qingqiugeek
+ * @date: 2026/5/9 16:24
+ * @description: User controller
  */
 
 @RestController

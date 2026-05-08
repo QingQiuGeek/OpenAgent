@@ -7,7 +7,9 @@ import dev.langchain4j.model.chat.listener.ChatModelResponseContext;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 底层 provider 的流式聊天日志监听器（占位实现）。
+ * @author: qingqiugeek
+ * @date: 2026/5/10 18:15
+ * @description: MyChatModel listener
  */
 @Slf4j
 public class MyChatModelListener implements ChatModelListener {

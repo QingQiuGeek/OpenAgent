@@ -7,9 +7,9 @@ import com.qingqiu.openagent.model.vo.LoginUserVO;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * @author 懒大王Smile
- * @description 针对表【user(用户表)】的数据库操作Service
- * @createDate 2024-09-12 22:19:13
+ * @author: qingqiugeek
+ * @date: 2026/5/4 20:15
+ * @description: User service
  */
 public interface UserService {
 

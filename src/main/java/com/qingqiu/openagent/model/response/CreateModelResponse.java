@@ -5,6 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/4 21:57
+ * @description: CreateModel response payload
+ */
+
 @Data
 @Builder
 @NoArgsConstructor

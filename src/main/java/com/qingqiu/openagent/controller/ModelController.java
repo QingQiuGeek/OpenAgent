@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 模型管理 Controller，所有接口均需登录，按当前用户隔离。
+ * @author: qingqiugeek
+ * @date: 2026/5/12 12:36
+ * @description: Model controller
  */
 @RestController
 @RequestMapping("/api/models")

@@ -14,9 +14,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 /**
- * @Author: QingQiu
- * @Date: 2025/6/28
- * @Description: 基于sa-token实现的拦截器，实现了token刷新、登录校验
+ * @author: qingqiugeek
+ * @date: 2026/5/3 08:53
+ * @description: SaToken interceptor
  */
 @Slf4j
 @Component

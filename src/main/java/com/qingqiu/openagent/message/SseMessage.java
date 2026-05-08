@@ -5,6 +5,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/11 09:58
+ * @description: Sse message
+ */
+
 @Data
 @AllArgsConstructor
 @Builder

@@ -9,6 +9,12 @@ import com.qingqiu.openagent.service.KnowledgeBaseFacadeService;
 import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/11 17:57
+ * @description: KnowledgeBase controller
+ */
+
 @RestController
 @RequestMapping("/api/knowledge-bases")
 @AllArgsConstructor

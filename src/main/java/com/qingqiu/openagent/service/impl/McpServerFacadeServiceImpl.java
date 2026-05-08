@@ -19,6 +19,12 @@ import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/8 21:34
+ * @description: McpServerFacade service implementation
+ */
+
 @Service
 @AllArgsConstructor
 public class McpServerFacadeServiceImpl implements McpServerFacadeService {

@@ -12,7 +12,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @TableName document
+ * @author: qingqiugeek
+ * @date: 2026/5/11 09:18
+ * @description: Document
  */
 @Data
 @Builder

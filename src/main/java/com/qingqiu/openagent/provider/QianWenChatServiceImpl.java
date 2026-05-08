@@ -13,10 +13,9 @@ import org.springframework.stereotype.Service;
 
 
 /**
- * qianWenAI服务调用
- *
- * @author ageerle@163.com
- * @date 2025/12/13
+ * @author: qingqiugeek
+ * @date: 2026/5/4 13:39
+ * @description: QianWenChat service implementation
  */
 @Service
 @Slf4j

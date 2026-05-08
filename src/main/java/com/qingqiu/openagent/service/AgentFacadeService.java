@@ -5,6 +5,12 @@ import com.qingqiu.openagent.model.request.UpdateAgentRequest;
 import com.qingqiu.openagent.model.response.CreateAgentResponse;
 import com.qingqiu.openagent.model.response.GetAgentsResponse;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/3 18:05
+ * @description: AgentFacade service
+ */
+
 public interface AgentFacadeService {
     GetAgentsResponse getAgents();
 

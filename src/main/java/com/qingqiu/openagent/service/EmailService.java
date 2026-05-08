@@ -1,7 +1,9 @@
 package com.qingqiu.openagent.service;
 
 /**
- * 邮件服务接口
+ * @author: qingqiugeek
+ * @date: 2026/5/4 16:18
+ * @description: Email service
  */
 public interface EmailService {
     /**

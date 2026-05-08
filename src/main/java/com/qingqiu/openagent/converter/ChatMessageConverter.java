@@ -11,6 +11,12 @@ import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/3 17:26
+ * @description: ChatMessage converter
+ */
+
 @Component
 @AllArgsConstructor
 public class ChatMessageConverter {

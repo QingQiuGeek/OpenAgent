@@ -16,8 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * 按 {@code model.id} 动态构建 {@link ChatModel} 的实现。带轻量缓存，当 {@code model.updatedAt}
- * 变化时自动重建。
+ * @author: qingqiugeek
+ * @date: 2026/5/4 13:30
+ * @description: DynamicChatModel service implementation
  */
 @Service
 @Slf4j

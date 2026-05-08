@@ -5,6 +5,12 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/3 20:47
+ * @description: ChunkBgeM3 DTO
+ */
+
 @Data
 @Builder
 public class ChunkBgeM3DTO {

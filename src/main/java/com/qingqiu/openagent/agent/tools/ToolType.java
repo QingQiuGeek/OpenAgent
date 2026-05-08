@@ -2,6 +2,12 @@ package com.qingqiu.openagent.agent.tools;
 
 // 基础的工具，比如直接回答工具，终止任务工具，是所有 Agent 都必须拥有的
 // 可选的工具，比如数据库查询工具，文件系统操作工具，这些工具可以根据对 Agent 的要求自由选择
+
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/2 20:31
+ * @description: ToolType
+ */
 public enum ToolType {
     // 固定拥有的工具
     FIXED,

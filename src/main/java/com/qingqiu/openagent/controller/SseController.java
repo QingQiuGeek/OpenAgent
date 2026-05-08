@@ -8,6 +8,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/6 17:27
+ * @description: Sse controller
+ */
+
 @RestController
 @RequestMapping("/sse")
 @AllArgsConstructor

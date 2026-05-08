@@ -6,6 +6,12 @@ import com.qingqiu.openagent.model.response.CreateChatSessionResponse;
 import com.qingqiu.openagent.model.response.GetChatSessionResponse;
 import com.qingqiu.openagent.model.response.GetChatSessionsResponse;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/10 18:01
+ * @description: ChatSessionFacade service
+ */
+
 public interface ChatSessionFacadeService {
     GetChatSessionsResponse getChatSessions();
 

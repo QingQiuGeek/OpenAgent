@@ -17,6 +17,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** MCP Server 管理，多租户；Agent 通过 allowed_tools 中的 {@code mcp:{id}} 引用。 */
+
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/6 17:30
+ * @description: McpServer controller
+ */
 @RestController
 @RequestMapping("/api/mcp-servers")
 @AllArgsConstructor

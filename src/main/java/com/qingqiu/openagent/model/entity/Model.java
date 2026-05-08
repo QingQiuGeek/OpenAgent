@@ -11,7 +11,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @TableName model
+ * @author: qingqiugeek
+ * @date: 2026/5/10 09:17
+ * @description: Model
  */
 @Data
 @Builder

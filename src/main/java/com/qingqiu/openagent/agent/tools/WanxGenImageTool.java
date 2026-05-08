@@ -6,34 +6,24 @@ import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationMessage;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationOutput;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationParam;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationResult;
-import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationOutput;
 import com.alibaba.dashscope.utils.JsonUtils;
 import com.qingqiu.openagent.converter.ModelConverter;
 import com.qingqiu.openagent.enums.BizExceptionEnum;
 import com.qingqiu.openagent.exception.BizException;
+import com.qingqiu.openagent.util.OSSUtil;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
-import dev.langchain4j.community.model.dashscope.WanxImageModel;
-import dev.langchain4j.community.model.dashscope.WanxImageSize;
-import dev.langchain4j.data.image.Image;
-import dev.langchain4j.model.output.Response;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 通义万相（DashScope wanx 系列）文生图工具。
- * <p>相较于免费的 Pollinations，万相在结构、中文语义与画面质量上一般更佳，适合付费场景。</p>
- *
- * <h3>API Key 配置</h3>
- * <pre>
- * # application.yaml 或 application-local.yaml
- * dashscope:
- *   api-key: ${DASHSCOPE_API_KEY:}   # 推荐走环境变量
- * </pre>
- * 代码会优先用上述配置；为空时退化到 SDK 默认（读环境变量 {@code DASHSCOPE_API_KEY}）。
- * 申请 Key：https://bailian.console.aliyun.com/?tab=model#/api-key
+ * @author: qingqiugeek
+ * @date: 2026/5/4 16:40
+ * @description: WanxGenImage agent tool
  */
 @Slf4j
 @Component
@@ -121,19 +111,31 @@ public class WanxGenImageTool implements ITool {
       if(output == null){
         throw new BizException(BizExceptionEnum.REQUEST_ERROR.getCode(),BizExceptionEnum.REQUEST_ERROR.getMessage());
       }
-      String imageUrl = output.getChoices().get(0).getMessage().getContent().get(0).get("image")
+      String upstreamUrl = output.getChoices().get(0).getMessage().getContent().get(0).get("image")
           .toString();
+      log.info("[WanxGenImageTool] upstream={}", upstreamUrl);
 
-//      String md = "![" + prompt.trim() + "](" + imageUrl + ")";
-//      return md
-//          + "\n\nINSTRUCTION FOR THE ASSISTANT: copy the line above (the `![...](...)` markdown) "
-//          + "verbatim into your final answer to the user, then add any extra description you like.";
-
-      return imageUrl;
+      // 上游 URL 是带签名的临时链接（24h 后失效），转存到自己的 OSS 拿永久 URL
+      String ossUrl = transferToOssQuietly(upstreamUrl);
+      String md = "![" + prompt.trim() + "](" + ossUrl + ")";
+      return md
+          + "\n\nINSTRUCTION FOR THE ASSISTANT: copy the line above (the `![...](...)` markdown) "
+          + "verbatim into your final answer to the user, then add any extra description you like.";
     } catch (Exception e) {
       log.error("[WanxGenImageTool] generate failed, model={} size={}", imageModelName, chosenSize, e);
       String msg = e.getMessage();
       return "图片生成异常：" + (StrUtil.isBlank(msg) ? e.getClass().getSimpleName() : msg);
+    }
+  }
+
+  /** 把上游临时 URL 转存到自己的 OSS；失败时降级返回上游 URL 保证流程不中断。 */
+  static String transferToOssQuietly(String upstreamUrl) {
+    try {
+      String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HH-mm-ss"));
+      return OSSUtil.uploadFromUrl(upstreamUrl, "generate-image/" + ts);
+    } catch (Exception ex) {
+      log.warn("[WanxGenImageTool] OSS 转存失败，降级返回上游 URL: {}", ex.getMessage());
+      return upstreamUrl;
     }
   }
 }

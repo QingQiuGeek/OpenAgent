@@ -5,6 +5,12 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/3 14:39
+ * @description: KnowledgeBase view object
+ */
+
 @Data
 @Builder
 public class KnowledgeBaseVO {

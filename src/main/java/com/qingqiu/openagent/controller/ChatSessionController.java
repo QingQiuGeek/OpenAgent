@@ -11,7 +11,9 @@ import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 会话管理，不处理消息
+ * @author: qingqiugeek
+ * @date: 2026/5/12 13:16
+ * @description: ChatSession controller
  */
 @RestController
 @RequestMapping("/api/chat-sessions")

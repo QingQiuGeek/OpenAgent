@@ -23,6 +23,12 @@ import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/10 09:20
+ * @description: ModelFacade service implementation
+ */
+
 @Service
 @AllArgsConstructor
 public class ModelFacadeServiceImpl implements ModelFacadeService {

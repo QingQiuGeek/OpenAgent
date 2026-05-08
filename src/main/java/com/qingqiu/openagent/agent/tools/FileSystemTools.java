@@ -13,6 +13,12 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/9 10:32
+ * @description: FileSystemTools
+ */
+
 @Slf4j
 public class FileSystemTools implements ITool {
 
@@ -33,7 +39,7 @@ public class FileSystemTools implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool(name = "readFile", value = "Read the text content of a file under the working directory")
+//    @Tool(name = "readFile", value = "Read the text content of a file under the working directory")
     public String readFile(
             @P(value = "Relative path to the file under the working directory, e.g. data/notes.txt")
             String filePath) {
@@ -52,7 +58,7 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "writeFile", value = "Write text content to a file (overwrite). Creates parent directories if missing.")
+//    @Tool(name = "writeFile", value = "Write text content to a file (overwrite). Creates parent directories if missing.")
     public String writeFile(
             @P(value = "Relative path to the target file under the working directory")
             String filePath,
@@ -72,7 +78,7 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "appendToFile", value = "Append text content to the end of a file. Creates the file if it does not exist.")
+//    @Tool(name = "appendToFile", value = "Append text content to the end of a file. Creates the file if it does not exist.")
     public String appendToFile(
             @P(value = "Relative path to the target file under the working directory")
             String filePath,
@@ -92,7 +98,7 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "listFiles", value = "List the entries (files and subdirectories) under the given directory")
+//    @Tool(name = "listFiles", value = "List the entries (files and subdirectories) under the given directory")
     public String listFiles(
             @P(value = "Relative directory path under the working directory; pass empty string to list the working directory itself")
             String directoryPath) {
@@ -120,7 +126,7 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "deleteFile", value = "Delete a file, or recursively delete a directory and its contents")
+//    @Tool(name = "deleteFile", value = "Delete a file, or recursively delete a directory and its contents")
     public String deleteFile(
             @P(value = "Relative path of the file or directory to delete, under the working directory")
             String path) {
@@ -150,7 +156,7 @@ public class FileSystemTools implements ITool {
         }
     }
 
-    @Tool(name = "createDirectory", value = "Create a directory (recursively, including any missing parent directories)")
+//    @Tool(name = "createDirectory", value = "Create a directory (recursively, including any missing parent directories)")
     public String createDirectory(
             @P(value = "Relative directory path under the working directory to create")
             String directoryPath) {

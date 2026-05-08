@@ -11,7 +11,9 @@ import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 管理聊天消息，会触发 ChatEvent 和 Agent 执行
+ * @author: qingqiugeek
+ * @date: 2026/5/5 11:24
+ * @description: ChatMessage controller
  */
 @RestController
 @RequestMapping("/api/chat-messages")

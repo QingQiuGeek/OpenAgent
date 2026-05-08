@@ -16,8 +16,12 @@ import java.io.IOException;
 import org.springframework.stereotype.Component;
 
 /**
- * PDF 生成工具
+ * @author: qingqiugeek
+ * @date: 2026/5/8 20:34
+ * @description: PDFGeneration agent tool
  */
+
+
 @Component
 public class PDFGenerationTool implements ITool {
 
@@ -36,7 +40,7 @@ public class PDFGenerationTool implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool(name = "pdfGeneration", value = "Generate a PDF file with the given filename and text content, returns the saved file path")
+//    @Tool(name = "pdfGeneration", value = "Generate a PDF file with the given filename and text content, returns the saved file path")
     public String pdfGeneration(
         @P(value = "Filename of the PDF (with .pdf suffix), e.g. report.pdf")
         String fileName,

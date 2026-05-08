@@ -6,7 +6,9 @@ import java.util.List;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * KnowledgeBase Mapper。批量查询通过 {@link #selectBatchIds} 实现（MP 原生方法）。
+ * @author: qingqiugeek
+ * @date: 2026/5/8 09:06
+ * @description: KnowledgeBase MyBatis mapper
  */
 @Mapper
 public interface KnowledgeBaseMapper extends BaseMapper<KnowledgeBase> {

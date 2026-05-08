@@ -6,6 +6,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/9 22:16
+ * @description: McpServer view object
+ */
+
 @Data
 @Builder
 @NoArgsConstructor

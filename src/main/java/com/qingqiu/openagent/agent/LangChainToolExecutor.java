@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 将 LangChain4j 的 ToolExecutionRequest 映射到 Spring Bean 工具方法执行。
+ * @author: qingqiugeek
+ * @date: 2026/5/2 17:27
+ * @description: LangChainTool executor
  */
 public class LangChainToolExecutor {
 

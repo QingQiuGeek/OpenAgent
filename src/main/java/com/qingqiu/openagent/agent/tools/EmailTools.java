@@ -6,6 +6,12 @@ import dev.langchain4j.agent.tool.Tool;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/11 10:11
+ * @description: EmailTools
+ */
+
 @Component
 public class EmailTools implements ITool {
 

@@ -7,6 +7,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/7 20:11
+ * @description: GetMcpServers response payload
+ */
+
 @Data
 @Builder
 @NoArgsConstructor

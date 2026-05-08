@@ -4,7 +4,9 @@ import lombok.Builder;
 import lombok.Data;
 
 /**
- * 文件上传成功后的元数据，前端拿到后写入 message.metadata.attachments。
+ * @author: qingqiugeek
+ * @date: 2026/5/3 15:59
+ * @description: UploadFile response payload
  */
 @Data
 @Builder

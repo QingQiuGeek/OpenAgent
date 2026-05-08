@@ -5,7 +5,9 @@ import com.qingqiu.openagent.model.entity.Model;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 模型 Mapper（表 {@code model}）。
+ * @author: qingqiugeek
+ * @date: 2026/5/4 08:35
+ * @description: Model MyBatis mapper
  */
 @Mapper
 public interface ModelMapper extends BaseMapper<Model> {

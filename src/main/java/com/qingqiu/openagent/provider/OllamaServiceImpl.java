@@ -10,10 +10,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
- * OllamaAI 服务调用。
- *
- * <p>当前 pom.xml 未引入 {@code langchain4j-ollama} 依赖，Step 6 会在 {@code DynamicChatModelService}
- * 中统一按 provider_type 构建模型；此类暂保留占位，避免误删接口实现。</p>
+ * @author: qingqiugeek
+ * @date: 2026/5/5 12:55
+ * @description: Ollama service implementation
  */
 @Service
 @Slf4j

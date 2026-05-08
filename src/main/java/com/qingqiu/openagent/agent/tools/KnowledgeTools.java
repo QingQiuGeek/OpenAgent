@@ -9,6 +9,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/6 18:47
+ * @description: KnowledgeTools
+ */
+
 @Component
 public class KnowledgeTools implements ITool {
 

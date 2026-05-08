@@ -11,6 +11,12 @@ import java.sql.ResultSetMetaData;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/8 14:44
+ * @description: DataBase agent tool
+ */
+
 @Component
 @Slf4j
 public class DataBaseTool implements ITool {
@@ -36,7 +42,7 @@ public class DataBaseTool implements ITool {
         return ToolType.OPTIONAL;
     }
 
-    @Tool(name = "databaseQuery", value = "Execute a read-only SQL SELECT query against PostgreSQL and return formatted rows")
+//    @Tool(name = "databaseQuery", value = "Execute a read-only SQL SELECT query against PostgreSQL and return formatted rows")
     public String query(
             @P(value = "Read-only SELECT SQL statement. Must start with SELECT; INSERT/UPDATE/DELETE/DDL are rejected.")
             String sql) {

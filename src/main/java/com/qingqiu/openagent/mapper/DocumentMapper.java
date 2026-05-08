@@ -5,7 +5,9 @@ import com.qingqiu.openagent.model.entity.Document;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * Document Mapper。
+ * @author: qingqiugeek
+ * @date: 2026/5/10 19:21
+ * @description: Document MyBatis mapper
  */
 @Mapper
 public interface DocumentMapper extends BaseMapper<Document> {

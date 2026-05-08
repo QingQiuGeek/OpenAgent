@@ -11,8 +11,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * @TableName mcp_server
- * <p>用户可自助注册 MCP Server 供 Agent 通过 {@code allowed_tools} 中 {@code mcp:{id}} 引用。</p>
+ * @author: qingqiugeek
+ * @date: 2026/5/9 16:57
+ * @description: McpServer
  */
 @Data
 @Builder

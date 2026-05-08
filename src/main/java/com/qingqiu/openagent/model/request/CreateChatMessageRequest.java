@@ -4,6 +4,12 @@ import com.qingqiu.openagent.model.dto.ChatMessageDTO;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/8 22:54
+ * @description: CreateChatMessage request payload
+ */
+
 @Data
 @Builder
 public class CreateChatMessageRequest {

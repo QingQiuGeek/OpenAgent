@@ -9,6 +9,12 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/2 21:04
+ * @description: ChatMessage DTO
+ */
+
 @Data
 @Builder
 public class ChatMessageDTO {

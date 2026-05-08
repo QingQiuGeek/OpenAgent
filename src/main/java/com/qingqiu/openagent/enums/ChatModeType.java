@@ -3,10 +3,9 @@ package com.qingqiu.openagent.enums;
 import lombok.Getter;
 
 /**
- * 模型分类
- *
- * @author
- * @date 2025-12-14
+ * @author: qingqiugeek
+ * @date: 2026/5/12 18:08
+ * @description: ChatModeType
  */
 @Getter
 public enum ChatModeType {

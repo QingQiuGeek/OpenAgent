@@ -8,6 +8,12 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/10 16:23
+ * @description: ToolFacade service implementation
+ */
+
 @Service
 @AllArgsConstructor
 public class ToolFacadeServiceImpl implements ToolFacadeService {

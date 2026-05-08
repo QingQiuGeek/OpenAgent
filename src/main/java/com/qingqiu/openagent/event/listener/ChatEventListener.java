@@ -8,6 +8,12 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/1 19:39
+ * @description: ChatEvent listener
+ */
+
 @Component
 @AllArgsConstructor
 public class ChatEventListener {

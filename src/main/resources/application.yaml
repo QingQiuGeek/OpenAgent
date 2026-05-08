@@ -53,8 +53,10 @@ langchain4j:
 image-model:
   qwen:
     model-name: qwen-image-2.0-pro
+    api-key: ${DASHSCOPE_API_KEY:}
   wanx:
     model-name: wan2.7-image-pro
+    api-key: ${DASHSCOPE_API_KEY:}
 
 mybatis-plus:
   configuration:

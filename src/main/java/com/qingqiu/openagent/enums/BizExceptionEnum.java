@@ -4,9 +4,9 @@ package com.qingqiu.openagent.enums;
 import lombok.Getter;
 
 /**
- * @author: qing qiu
- * @date: 2024/9/12 23:08
- * @description: 自定义错误码
+ * @author: qingqiugeek
+ * @date: 2026/5/6 21:35
+ * @description: BizException enum
  */
 @Getter
 public enum BizExceptionEnum {

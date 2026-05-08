@@ -3,6 +3,12 @@ package com.qingqiu.openagent.agent.tools;
 import dev.langchain4j.agent.tool.Tool;
 import org.springframework.stereotype.Component;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/3 12:51
+ * @description: Terminate agent tool
+ */
+
 @Component
 public class TerminateTool implements ITool {
 

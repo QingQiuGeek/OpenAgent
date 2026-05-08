@@ -12,6 +12,12 @@ import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/8 18:56
+ * @description: Sse service implementation
+ */
+
 @Slf4j
 @Service
 @AllArgsConstructor

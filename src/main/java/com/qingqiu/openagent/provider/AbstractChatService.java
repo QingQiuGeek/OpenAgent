@@ -5,10 +5,9 @@ import com.qingqiu.openagent.model.request.ChatRequest;
 import dev.langchain4j.model.chat.StreamingChatModel;
 
 /**
- * 聊天消息Service接口
- *
- * @author ageerle
- * @date 2025-12-14
+ * @author: qingqiugeek
+ * @date: 2026/5/4 14:54
+ * @description: AbstractChat service
  */
 public interface AbstractChatService {
 

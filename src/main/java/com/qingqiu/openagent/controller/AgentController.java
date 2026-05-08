@@ -9,6 +9,12 @@ import com.qingqiu.openagent.service.AgentFacadeService;
 import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/5 20:45
+ * @description: Agent controller
+ */
+
 @RestController
 @RequestMapping("/api/agents")
 @AllArgsConstructor

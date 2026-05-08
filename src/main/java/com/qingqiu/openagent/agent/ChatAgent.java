@@ -36,6 +36,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * @author: qingqiugeek
+ * @date: 2026/5/4 09:14
+ * @description: Chat agent
+ */
+
 @Slf4j
 public class ChatAgent {
     // 智能体 ID
