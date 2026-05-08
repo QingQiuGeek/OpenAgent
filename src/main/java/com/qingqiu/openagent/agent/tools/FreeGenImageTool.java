@@ -35,7 +35,9 @@ public class GenImageTool implements ITool {
 
     @Tool(
             name = "generateImage",
-            value = "Generate an image based on a text description. Returns a Markdown image link that can be embedded in the reply."
+            value = "Generate an image based on a text description. Returns a Markdown image link `![alt](url)`. "
+                    + "IMPORTANT: in your final reply to the user, you MUST include the returned `![alt](url)` "
+                    + "markdown VERBATIM so the image is displayed; otherwise the user will only see text."
     )
     public String genImage(
             @P(value = "Text description (prompt) of the image to generate, in English for best quality")
@@ -59,8 +61,12 @@ public class GenImageTool implements ITool {
                     + "&nologo=true";
 
             log.info("[GenImageTool] prompt={}, url={}", prompt, imageUrl);
-            // 直接返回 Markdown 图片，可被前端 XMarkdown 渲染显示
-            return "![" + prompt + "](" + imageUrl + ")";
+            // 工具返回不仅给出 markdown，还要再附一段提示，强制模型把 markdown 复制到最终回复里。
+            // 否则有些模型只会用自然语言描述图片而不嵌入链接，导致前端无法渲染图片本体。
+            String md = "![" + prompt + "](" + imageUrl + ")";
+            return md
+                    + "\n\nINSTRUCTION FOR THE ASSISTANT: copy the line above (the `![...](...)` markdown) "
+                    + "verbatim into your final answer to the user, then add any extra description you like.";
         } catch (Exception e) {
             log.error("genImageTool error", e);
             return "Error generating image: " + e.getMessage();
