@@ -45,7 +45,10 @@ const IMAGE_URL_RE = /\.(png|jpe?g|gif|webp|bmp|svg|avif)(\?.*)?$/i;
 const isImageUrl = (href?: string) =>
   !!href && (IMAGE_URL_RE.test(href) || /image\/(png|jpeg|gif|webp)/i.test(href));
 
-// AI 内容里 markdown 的 <img>：用 antd Image，点击原尺寸预览
+// AI 内容里 markdown 的 <img>：用 antd Image，点击原尺寸预览。
+// referrerPolicy="no-referrer" 用于规避 Chrome ORB（Opaque Response Blocking）：
+// 像 pollinations.ai 这类三方图床在带 Referer 跨站请求时会被浏览器以 ERR_BLOCKED_BY_ORB 拦截，
+// 显示为「图片加载失败」。去掉 referer 即可正常加载。
 const MarkdownImg: React.FC<React.ImgHTMLAttributes<HTMLImageElement>> = ({
   src,
   alt,
@@ -56,6 +59,7 @@ const MarkdownImg: React.FC<React.ImgHTMLAttributes<HTMLImageElement>> = ({
     <Image
       src={src}
       alt={alt}
+      referrerPolicy="no-referrer"
       style={{ maxWidth: 480, borderRadius: 8 }}
       preview={{ src }}
       {...(rest as Record<string, unknown>)}
@@ -87,10 +91,13 @@ const MARKDOWN_COMPONENTS = {
 };
 
 // AI 气泡样式：去掉默认背景与内边距，直接显示页面底色
+// minWidth:0 / maxWidth:100% 必要：否则内部 <pre> 代码块会以 min-content 撑开 bubble，超出聊天区 max-w-4xl
 const AI_BUBBLE_STYLES = {
   content: {
     background: "transparent",
     padding: 0,
+    minWidth: 0,
+    maxWidth: "100%",
     boxShadow: "none",
     border: "none",
   } as React.CSSProperties,
@@ -129,30 +136,33 @@ const ToolCallDisplay: React.FC<{ toolCall: ToolCall }> = ({ toolCall }) => {
   );
 };
 
-// 工具响应展示组件（可折叠）
+// 工具响应展示组件（可折叠）。
+// 设计定位：这里只展示调试/追溯用的原始返回，不做任何富文本渲染。
+// 例如 generateImage 返回的 "![alt](url)" 原样以文本呈现；
+// 图片本体交由 AI 下一轮的正式回复（markdown 中嵌入 ![](url)）由 XMarkdown 渲染。
 const ToolResponseDisplay: React.FC<{ toolResponse: ToolResponse }> = ({
   toolResponse,
 }) => {
   const [expanded, setExpanded] = useState(false);
-  
+
   let parsedData: unknown = null;
   let isJson = false;
   let dataPreview = "";
-  
+
   try {
     parsedData = JSON.parse(toolResponse.responseData);
     isJson = true;
     const jsonStr = JSON.stringify(parsedData);
     dataPreview = jsonStr.length > 100 ? jsonStr.slice(0, 100) + "..." : jsonStr;
   } catch {
-    dataPreview = toolResponse.responseData.length > 100 
-      ? toolResponse.responseData.slice(0, 100) + "..." 
+    dataPreview = toolResponse.responseData.length > 100
+      ? toolResponse.responseData.slice(0, 100) + "..."
       : toolResponse.responseData;
   }
 
   return (
     <div className="my-1.5 text-xs">
-      <div 
+      <div
         className="flex items-center gap-2 text-gray-500 cursor-pointer hover:text-gray-700 transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
@@ -170,7 +180,7 @@ const ToolResponseDisplay: React.FC<{ toolResponse: ToolResponse }> = ({
         <div className="ml-5 mt-1.5 p-2 bg-gray-50 rounded border border-gray-200">
           <div className="text-xs text-gray-600 font-mono">
             {isJson ? (
-              <pre className="whitespace-pre-wrap break-words overflow-x-auto max-h-60 overflow-y-auto">
+              <pre className="whitespace-pre-wrap break-words overflow-x-auto max-h-60 overflow-y-auto scrollbar-thin">
                 {JSON.stringify(parsedData, null, 2)}
               </pre>
             ) : (
@@ -332,11 +342,12 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
             {/* Assistant 消息 - 第一条带头像（Bubble），后续不带头像（缩进对齐） */}
             {message.role === "assistant" && isFirstAssistantOfTurn && (
               <Bubble
+                style={{ width: "100%", maxWidth: "100%" }}
                 styles={AI_BUBBLE_STYLES}
                 classNames={AI_BUBBLE_CLASSNAMES}
                 avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}
                 content={
-                  <div className="w-full min-w-0 max-w-full overflow-x-auto">
+                  <div className="w-full min-w-0 max-w-full">
                     {message.metadata?.toolCalls &&
                       message.metadata.toolCalls.length > 0 && (
                         <div className="mb-1 flex flex-wrap gap-2">
@@ -378,7 +389,7 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
             {/* Assistant 消息 - 同一轮内的后续消息，无头像，左缩进 52px 与首条对齐 */}
             {message.role === "assistant" && !isFirstAssistantOfTurn && (
               <div className="pl-[52px]">
-                <div className="w-full min-w-0 max-w-full overflow-x-auto">
+                <div className="w-full min-w-0 max-w-full">
                   {message.metadata?.toolCalls &&
                     message.metadata.toolCalls.length > 0 && (
                       <div className="mb-1 flex flex-wrap gap-2">
@@ -476,7 +487,7 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
         if (!showThinking && !showStreaming) return null;
 
         const inner = showStreaming ? (
-          <div className="w-full min-w-0 max-w-full overflow-x-auto">
+          <div className="w-full min-w-0 max-w-full">
             <div className="markdown-body min-w-0">
               <XMarkdown
                 components={MARKDOWN_COMPONENTS}
@@ -496,6 +507,7 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
         return isNewTurn ? (
           <div className="mt-4 mb-1">
             <Bubble
+              style={{ width: "100%", maxWidth: "100%" }}
               styles={AI_BUBBLE_STYLES}
               classNames={AI_BUBBLE_CLASSNAMES}
               avatar={<Avatar src="/logo.jpg" size={AVATAR_SIZE} />}

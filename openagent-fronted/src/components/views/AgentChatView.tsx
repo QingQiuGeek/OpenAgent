@@ -10,11 +10,14 @@ import {
   deleteChatMessage,
   getChatMessagesBySessionId,
   getChatSession,
+  getOptionalTools,
   stopAgent,
+  type ToolVO,
   type UploadFileResponse,
 } from "../../api/api.ts";
 import { useAgents } from "../../hooks/useAgents.ts";
 import { useChatSessions } from "../../hooks/useChatSessions.ts";
+import { useKnowledgeBases } from "../../hooks/useKnowledgeBases.ts";
 import { useAuth } from "../../contexts/AuthContext.tsx";
 import { useSelectedAgent } from "../../contexts/SelectedAgentContext.tsx";
 import EmptyAgentChatView from "./agentChatView/EmptyAgentChatView.tsx";
@@ -53,6 +56,34 @@ const AgentChatView: React.FC = () => {
     () => agents.find((a) => a.id === activeAgentId),
     [agents, activeAgentId],
   );
+
+  // 拉取全部可选工具一次，用于将 agent.allowedTools (string[]) 补齐为名称+描述
+  const [allTools, setAllTools] = useState<ToolVO[]>([]);
+  useEffect(() => {
+    if (!user) return;
+    getOptionalTools()
+      .then((resp) => setAllTools(resp.tools))
+      .catch((err) => console.error("[AgentChatView] 获取工具列表失败:", err));
+  }, [user]);
+
+  // 知识库列表（复用全局 hook，避免重复拉取）
+  const { knowledgeBases: allKbs } = useKnowledgeBases();
+
+  // 当前 agent 绑定的工具：按 allowedTools 按名称过滤，未加载完之前返回空数组
+  const headerTools = useMemo(() => {
+    if (!activeAgent || !activeAgent.allowedTools?.length) return [];
+    return allTools
+      .filter((t) => activeAgent.allowedTools!.includes(t.name))
+      .map((t) => ({ name: t.name, description: t.description }));
+  }, [activeAgent, allTools]);
+
+  // 当前 agent 绑定的知识库：按 allowedKbs (id) 过滤
+  const headerKbs = useMemo(() => {
+    if (!activeAgent || !activeAgent.allowedKbs?.length) return [];
+    return allKbs
+      .filter((kb) => activeAgent.allowedKbs!.includes(kb.knowledgeBaseId))
+      .map((kb) => ({ name: kb.name, description: kb.description }));
+  }, [activeAgent, allKbs]);
 
   const getChatMessages = useCallback(async () => {
     if (!chatSessionId) return;
@@ -305,7 +336,13 @@ const AgentChatView: React.FC = () => {
   if (!chatSessionId) {
     return (
       <div className="flex flex-col h-full">
-        <ChatHeader title={headerTitle} subtitle={headerSubtitle} description={headerDescription} />
+        <ChatHeader
+          title={headerTitle}
+          subtitle={headerSubtitle}
+          description={headerDescription}
+          tools={activeAgent ? headerTools : undefined}
+          knowledgeBases={activeAgent ? headerKbs : undefined}
+        />
         <div className="flex-1 min-h-0">
           <EmptyAgentChatView
             agents={agents}
@@ -319,7 +356,13 @@ const AgentChatView: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full min-w-0 overflow-hidden">
-      <ChatHeader title={headerTitle} subtitle={headerSubtitle} description={headerDescription} />
+      <ChatHeader
+        title={headerTitle}
+        subtitle={headerSubtitle}
+        description={headerDescription}
+        tools={activeAgent ? headerTools : undefined}
+        knowledgeBases={activeAgent ? headerKbs : undefined}
+      />
       <AgentChatHistory
         messages={messages}
         streamingContent={streamingContent}

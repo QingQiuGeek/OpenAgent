@@ -2,6 +2,7 @@ package com.qingqiu.openagent.agent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.qingqiu.openagent.agent.tools.ITool;
+import com.qingqiu.openagent.util.AttachmentContentExtractor;
 import com.qingqiu.openagent.converter.AgentConverter;
 import com.qingqiu.openagent.converter.ChatMessageConverter;
 import com.qingqiu.openagent.converter.KnowledgeBaseConverter;
@@ -49,6 +50,7 @@ public class ChatAgentFactory {
     private final ChatMessageConverter chatMessageConverter;
     private final ObjectMapper objectMapper;
     private final AgentStopRegistry agentStopRegistry;
+    private final AttachmentContentExtractor attachmentExtractor;
 
     // 运行时 Agent 配置
     private AgentDTO agentConfig;
@@ -64,7 +66,8 @@ public class ChatAgentFactory {
             ChatMessageFacadeService chatMessageFacadeService,
             ChatMessageConverter chatMessageConverter,
             ObjectMapper objectMapper,
-            AgentStopRegistry agentStopRegistry
+            AgentStopRegistry agentStopRegistry,
+            AttachmentContentExtractor attachmentExtractor
     ) {
         this.dynamicChatModelService = dynamicChatModelService;
         this.sseService = sseService;
@@ -77,6 +80,7 @@ public class ChatAgentFactory {
         this.chatMessageConverter = chatMessageConverter;
         this.objectMapper = objectMapper;
         this.agentStopRegistry = agentStopRegistry;
+        this.attachmentExtractor = attachmentExtractor;
     }
 
     private Agent loadAgent(String agentId) {
@@ -141,16 +145,16 @@ public class ChatAgentFactory {
     }
 
     /**
-     * 把用户消息的 metadata.attachments 拼到 content 后面，让 LLM 能感知到附件。
-     * <p>展示层不变（数据库里 content 仍是用户原文），仅在喂给模型时拼接附件清单。
+     * 把用户消息的附件内容提取后拼到 content，让 LLM 能理解文件实际内容。
      *
-     * <pre>
-     * &lt;原始 content&gt;
+     * <p>策略（按文件类型）：
+     * <ul>
+     *   <li>图片：只告诉 LLM 有图片附件及 URL（无法提取像素含义）</li>
+     *   <li>可解析文档/代码：用 Tika 提取文本，截断到 50,000 字符后内联给 LLM</li>
+     *   <li>解析失败：降级为只给 URL，告知 LLM 无法读取内容</li>
+     * </ul>
      *
-     * 附件:
-     * - [文件名] (image/png, 1024B): https://oss.../foo.png
-     * - [文件名] (text/plain, 200B): https://oss.../bar.txt
-     * </pre>
+     * <p>展示层不变：数据库里 content 仍是用户原文，只在送给模型时拼接附件内容。
      */
     private String buildUserContentWithAttachments(ChatMessageDTO dto) {
         String content = dto.getContent();
@@ -162,26 +166,29 @@ public class ChatAgentFactory {
         if (StringUtils.hasLength(content)) {
             sb.append(content).append("\n\n");
         }
-        sb.append("附件:");
+        sb.append("以下是用户上传的附件内容：");
         for (ChatMessageDTO.Attachment att : dto.getMetadata().getAttachments()) {
-            sb.append("\n- [")
-                    .append(att.getName() == null ? "未命名" : att.getName())
-                    .append("]");
-            if (StringUtils.hasLength(att.getContentType()) || att.getSize() != null) {
-                sb.append(" (");
-                if (StringUtils.hasLength(att.getContentType())) {
-                    sb.append(att.getContentType());
-                }
-                if (att.getSize() != null) {
-                    if (StringUtils.hasLength(att.getContentType())) {
-                        sb.append(", ");
-                    }
-                    sb.append(att.getSize()).append("B");
-                }
-                sb.append(")");
+            String name = att.getName() == null ? "未命名" : att.getName();
+            String ct   = att.getContentType();
+            sb.append("\n\n--- 附件: ").append(name);
+            if (StringUtils.hasLength(ct)) {
+                sb.append(" (").append(ct).append(")");
             }
-            if (StringUtils.hasLength(att.getUrl())) {
-                sb.append(": ").append(att.getUrl());
+            sb.append(" ---");
+
+            // 图片无可提取文本，只告知 LLM 有图片
+            if (ct != null && ct.startsWith("image/")) {
+                sb.append("\n[图片附件，URL: ").append(att.getUrl()).append("]");
+                continue;
+            }
+
+            // 尝试用 Tika 提取文件文本内容
+            String extracted = attachmentExtractor.extract(att.getUrl(), ct);
+            if (StringUtils.hasLength(extracted)) {
+                sb.append("\n").append(extracted);
+            } else {
+                // 降级：Tika 无法解析或文件为空，只给 URL
+                sb.append("\n[无法提取文本内容，文件 URL: ").append(att.getUrl()).append("]");
             }
         }
         return sb.toString();

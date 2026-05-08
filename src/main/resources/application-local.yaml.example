@@ -14,3 +14,8 @@ langchain4j:
     dashscope:
       embedding-model:
         api-key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# 阿里云百炼 DashScope API Key，供 QwenGenImageTool（通义万相文生图）使用
+# 申请：https://bailian.console.aliyun.com/?tab=model#/api-key
+dashscope:
+  api-key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

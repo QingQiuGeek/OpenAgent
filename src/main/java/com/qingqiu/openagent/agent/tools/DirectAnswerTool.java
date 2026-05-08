@@ -1,5 +1,6 @@
 package com.qingqiu.openagent.agent.tools;
 
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +22,16 @@ public class DirectAnswerTool implements ITool {
         return ToolType.FIXED;
     }
 
-    @Tool(name = "directAnswer", value = "Use this when no additional tool is needed")
-    public void directAnswer() {
+    @Tool(
+            name = "directAnswer",
+            value = "Call this EXACTLY ONCE when you can fully answer the user's question without any other tool. "
+                    + "Put the COMPLETE final answer for the user into the `message` argument (Markdown supported). "
+                    + "After this call, the conversation is finished — do not call directAnswer or terminate again."
+    )
+    public String directAnswer(
+            @P("The full final answer shown to the user. Required. Use Markdown if needed.")
+            String message
+    ) {
+        return message == null ? "" : message;
     }
 }

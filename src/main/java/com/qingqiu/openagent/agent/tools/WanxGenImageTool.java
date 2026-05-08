@@ -1,13 +1,23 @@
 package com.qingqiu.openagent.agent.tools;
 
 import cn.hutool.core.util.StrUtil;
+import com.alibaba.dashscope.aigc.imagegeneration.ImageGeneration;
+import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationMessage;
+import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationOutput;
+import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationParam;
+import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationResult;
+import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationOutput;
 import com.alibaba.dashscope.utils.JsonUtils;
+import com.qingqiu.openagent.converter.ModelConverter;
+import com.qingqiu.openagent.enums.BizExceptionEnum;
+import com.qingqiu.openagent.exception.BizException;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.community.model.dashscope.WanxImageModel;
 import dev.langchain4j.community.model.dashscope.WanxImageSize;
 import dev.langchain4j.data.image.Image;
 import dev.langchain4j.model.output.Response;
+import java.util.Collections;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -27,18 +37,23 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class QwenGenImageTool implements ITool {
+public class WanxGenImageTool implements ITool {
 
   /** 默认尺寸：DashScope wanx 系列使用 W*H 表示（注意中间是星号，不是 x）。 */
   private static final String DEFAULT_SIZE = "1024*1024";
+  private final ModelConverter modelConverter;
 
   /** 文生图模型名，例如 wanx2.1-t2i-turbo / wanx2.1-t2i-plus / wanx-v1。 */
-  @Value("${image-model.model-name}")
+  @Value("${image-model.wanx.model-name}")
   private String imageModelName;
 
   /** DashScope API Key。可在 application-local.yaml 或环境变量 DASHSCOPE_API_KEY 中配置。 */
-  @Value("${image-model.api-key}")
+  @Value("${image-model.wanx.api-key}")
   private String apiKey;
+
+  public WanxGenImageTool(ModelConverter modelConverter) {
+    this.modelConverter = modelConverter;
+  }
 
   @Override
   public String getDescription() {
@@ -47,7 +62,7 @@ public class QwenGenImageTool implements ITool {
 
   @Override
   public String getName() {
-    return "qwenGenImageTool";
+    return "wanxGenImageTool";
   }
 
   @Override
@@ -56,8 +71,8 @@ public class QwenGenImageTool implements ITool {
   }
 
   @Tool(
-      name = "qwenGenerateImage",
-      value = "Generate a high-quality image with Aliyun Tongyi Wanxiang (DashScope wanx series). "
+      name = "wanxGenerateImage",
+      value = "Generate a high-quality image with png. "
           + "Use this whenever the user asks to draw / paint / generate / produce an image, illustration, poster, "
           + "icon, avatar, or scene. Returns a Markdown image link `![alt](url)`. "
           + "IMPORTANT: in your final reply to the user, you MUST include the returned `![alt](url)` markdown VERBATIM "
@@ -66,8 +81,8 @@ public class QwenGenImageTool implements ITool {
   public String generateImage(
       @P(value = "Image description (prompt). 中英文均可，越具体越好；最多 800 个字符。")
       String prompt,
-      @P(value = "Optional: image size, format `WIDTH*HEIGHT` (note: middle is `*` not `x`). "
-          + "Common: 1024*1024, 1280*720, 720*1280. Default 1024*1024.",
+      @P(value = "image size, format must be `WIDTH*HEIGHT`! "
+          + "Common: 1:1 is 1280*1280, 3:4 is 1104*1472, 4:3 is 1472*1104, 9:16 is 960*1696, 16:9 is 1696*960, 1280*720, 720*1280. Default 1280*1280.",
           required = false)
       String size
   ) {
@@ -75,31 +90,48 @@ public class QwenGenImageTool implements ITool {
       return "Error: prompt cannot be empty.";
     }
     if (StrUtil.isBlank(apiKey)) {
-      log.warn("[QwenGenImageTool] apiKey is blank; configure image-model.api-key or DASHSCOPE_API_KEY env var");
+      log.warn("[WanxGenImageTool] apiKey is blank; configure image-model.api-key or DASHSCOPE_API_KEY env var");
       return "图片生成失败：DashScope API Key 未配置，请在 application-local.yaml 设置 image-model.api-key 或环境变量 DASHSCOPE_API_KEY。";
     }
     // size 是可选参数，AI 不传时为 null/空，需要兜底；否则 WanxImageSize.of(null) 会 NPE。
     String chosenSize = StrUtil.isBlank(size) ? DEFAULT_SIZE : size.trim();
 
-    try {
-      WanxImageModel wanxImageModel = WanxImageModel.builder()
-          .modelName(imageModelName)
-          .apiKey(apiKey)
-          .size(WanxImageSize.of(chosenSize))
-          .build();
-      Response<Image> response = wanxImageModel.generate(prompt);
-      log.info("[QwenGenImageTool] model={} size={} result={}", imageModelName, chosenSize, JsonUtils.toJson(response));
+    ImageGenerationMessage message = ImageGenerationMessage.builder()
+        .role("user")
+        .content(Collections.singletonList(
+            Collections.singletonMap("text",prompt)
+        )).build();
 
-      if (response == null || response.content() == null || response.content().url() == null) {
-        return "图片生成失败：模型未返回图片 URL（可能是 base64 模式或服务异常）";
+    ImageGenerationParam param = ImageGenerationParam.builder()
+        .apiKey(apiKey)
+        .model(imageModelName)
+        .n(1)
+        .size(chosenSize)
+        .negativePrompt("低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，蜡像感，人脸无细节，过度光滑，画面具有AI感。构图混乱。文字模糊，扭曲。")
+        .promptExtend(true)
+        .watermark(false)
+        .messages(Collections.singletonList(message))
+        .build();
+
+    ImageGeneration imageGeneration = new ImageGeneration();
+    try {
+      ImageGenerationResult result =  imageGeneration.call(param);
+      log.info("[WanxGenImageTool] model={} size={} result={}", imageModelName, chosenSize, JsonUtils.toJson(result));
+      ImageGenerationOutput output = result.getOutput();
+      if(output == null){
+        throw new BizException(BizExceptionEnum.REQUEST_ERROR.getCode(),BizExceptionEnum.REQUEST_ERROR.getMessage());
       }
-      String imageUrl = response.content().url().toString();
-      String md = "![" + prompt.trim() + "](" + imageUrl + ")";
-      return md
-          + "\n\nINSTRUCTION FOR THE ASSISTANT: copy the line above (the `![...](...)` markdown) "
-          + "verbatim into your final answer to the user, then add any extra description you like.";
+      String imageUrl = output.getChoices().get(0).getMessage().getContent().get(0).get("image")
+          .toString();
+
+//      String md = "![" + prompt.trim() + "](" + imageUrl + ")";
+//      return md
+//          + "\n\nINSTRUCTION FOR THE ASSISTANT: copy the line above (the `![...](...)` markdown) "
+//          + "verbatim into your final answer to the user, then add any extra description you like.";
+
+      return imageUrl;
     } catch (Exception e) {
-      log.error("[QwenGenImageTool] generate failed, model={} size={}", imageModelName, chosenSize, e);
+      log.error("[WanxGenImageTool] generate failed, model={} size={}", imageModelName, chosenSize, e);
       String msg = e.getMessage();
       return "图片生成异常：" + (StrUtil.isBlank(msg) ? e.getClass().getSimpleName() : msg);
     }

@@ -5,6 +5,12 @@ spring:
     active: local
   application:
     name: openagent
+  servlet:
+    multipart:
+      # 单文件 5MB；前端会先拦截，这里是兜底
+      max-file-size: 5MB
+      # 单次请求 30MB（最多 5 个 5MB 附件 + 富表单冗余）
+      max-request-size: 30MB
   datasource:
     url: jdbc:postgresql://localhost:5432/openagent?stringtype=unspecified
     driver-class-name: org.postgresql.Driver
@@ -44,6 +50,11 @@ langchain4j:
         model-name: text-embedding-v3
         dimensions: 1024
 
+image-model:
+  qwen:
+    model-name: qwen-image-2.0-pro
+  wanx:
+    model-name: wan2.7-image-pro
 
 mybatis-plus:
   configuration:

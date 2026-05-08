@@ -18,8 +18,11 @@ interface MessageActionsProps {
 
 /**
  * 消息操作行：基于 antd-x {@link Actions}，label 自动作为 tooltip。
- * 绝对定位 + 父级 h-0：完全脱离布局流，hover 显示时不会撑大气泡宽度，
- * 也不会把后续消息往下推。
+ * <p>布局：inline + 固定预留高度 (h-7)，避免之前绝对定位导致的两个问题：
+ * (1) 操作按钮浮在下条消息头顶造成视觉重叠；
+ * (2) 0 高度容器使光标在「气泡」与「按钮」之间瞬时离开 group，
+ * 导致 group-hover 立即失效、按钮还没点到就消失。</p>
+ * <p>采用 opacity 过渡而非 display:hidden，鼠标在保留空间内移动也能维持显示。</p>
  */
 const MessageActions: React.FC<MessageActionsProps> = ({
   message,
@@ -69,14 +72,12 @@ const MessageActions: React.FC<MessageActionsProps> = ({
   ];
 
   return (
-    <div className="relative h-0 w-full pointer-events-none">
-      <div
-        className={`hidden group-hover:block absolute top-0.5 whitespace-nowrap pointer-events-auto ${
-          align === "end" ? "right-0" : "left-0"
-        }`}
-      >
-        <Actions items={items} variant="borderless" />
-      </div>
+    <div
+      className={`flex h-6 items-center -mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${
+        align === "end" ? "justify-end" : "justify-start"
+      }`}
+    >
+      <Actions items={items} variant="borderless" />
     </div>
   );
 };

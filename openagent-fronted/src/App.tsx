@@ -4,6 +4,7 @@ import OpenAgentLayout from "./components/OpenAgentLayout.tsx";
 import { ChatSessionsProvider } from "./contexts/ChatSessionsContext.tsx";
 import { AuthProvider, useAuth } from "./contexts/AuthContext.tsx";
 import { SelectedAgentProvider } from "./contexts/SelectedAgentContext.tsx";
+import { AgentsProvider } from "./contexts/AgentsContext.tsx";
 import LoginRegisterModal from "./components/auth/LoginRegisterModal.tsx";
 
 /**
@@ -23,9 +24,11 @@ function AppBody() {
 
   return (
     <ChatSessionsProvider key={user?.userId ?? "guest"}>
-      <SelectedAgentProvider>
-        <OpenAgentLayout />
-      </SelectedAgentProvider>
+      <AgentsProvider>
+        <SelectedAgentProvider>
+          <OpenAgentLayout />
+        </SelectedAgentProvider>
+      </AgentsProvider>
     </ChatSessionsProvider>
   );
 }

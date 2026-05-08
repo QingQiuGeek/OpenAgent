@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 // useState 仍被 useLoopTypewriter 内部使用
 import { Card, Typography } from "antd";
-import AgentChatInput from "./AgentChatInput";
+import AgentChatInput, { type ChatInputSubmitPayload } from "./AgentChatInput";
 import type { AgentVO } from "../../../api/api.ts";
 
 const { Title, Text } = Typography;
@@ -75,7 +75,11 @@ const QUICK_CARDS = [
 ];
 
 interface DefaultAgentChatViewProps {
-  handleSendMessage: (message: string) => void;
+  /**
+   * 接收完整 payload（与 {@link AgentChatView#handleSendMessage} 一致）。
+   * 不能只转发 text，否则附件会被丢弃，导致新会话首条消息丢文件。
+   */
+  handleSendMessage: (payload: ChatInputSubmitPayload) => void;
   loading: boolean;
   agents: AgentVO[];
 }
@@ -164,7 +168,7 @@ const EmptyAgentChatView: React.FC<DefaultAgentChatViewProps> = ({
         <div className="px-4 pb-4 pt-4">
           <AgentChatInput
             isAgentRunning={loading}
-            onSend={(payload) => handleSendMessage(payload.text)}
+            onSend={handleSendMessage}
           />
         </div>
       </div>

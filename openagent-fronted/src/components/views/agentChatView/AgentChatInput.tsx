@@ -58,7 +58,12 @@ const ACCEPT_EXTS = [
 ];
 
 const ACCEPT_STR = ACCEPT_EXTS.join(",");
-const MAX_FILE_SIZE_MB = 20;
+/** 单文件大小上限（MB），与后端 FileController.MAX_FILE_SIZE_BYTES 对齐 */
+const MAX_FILE_SIZE_MB = 5;
+/** 单条消息附件数量上限 */
+const MAX_FILE_COUNT = 5;
+/** 提示文案：鼠标悬停回形针按钮时展示 */
+const UPLOAD_HINT = `最多 ${MAX_FILE_COUNT} 个文件，单个不超过 ${MAX_FILE_SIZE_MB}MB；仅支持文档/代码/图片，不支持视频、音频。`;
 
 // AttachmentItem 在 antd-x 内部基于 UploadFile，自带 status / percent。
 // 这里再扩展一个 uploadedMeta 字段：上传成功后保存后端返回的 OSS 元数据。
@@ -131,12 +136,29 @@ const AgentChatInput: React.FC<AgentChatInputProps> = ({
   // - status="uploading" 让 Attachments 显示转圈进度，上传完成切到 "done"
   const appendFiles = (files: File[]) => {
     if (!files.length) return;
+    // 按剩余名额接收；超出部分一次性提醒后丢弃
+    const remaining = MAX_FILE_COUNT - items.length;
+    if (remaining <= 0) {
+      antdMessage.warning(`最多只能上传 ${MAX_FILE_COUNT} 个文件`);
+      return;
+    }
+    if (files.length > remaining) {
+      antdMessage.warning(
+        `本次只能再上传 ${remaining} 个文件，其余已忽略`,
+      );
+    }
+    const candidates = files.slice(0, remaining);
     const accepted: AttachmentItem[] = [];
-    for (const f of files) {
+    for (const f of candidates) {
       const lowerName = f.name.toLowerCase();
       const extOk = ACCEPT_EXTS.some((ext) => lowerName.endsWith(ext));
       if (!extOk) {
         antdMessage.warning(`${f.name} 不支持的文件类型，已跳过`);
+        continue;
+      }
+      // 全面拦截视频 / 音频 MIME（防止用户伪造扩展名）
+      if (f.type && (f.type.startsWith("video/") || f.type.startsWith("audio/"))) {
+        antdMessage.warning(`${f.name} 不支持视频 / 音频文件，已跳过`);
         continue;
       }
       if (f.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
@@ -226,6 +248,8 @@ const AgentChatInput: React.FC<AgentChatInputProps> = ({
                 size="small"
                 icon={<PaperClipOutlined />}
                 onClick={handleAddFiles}
+                title={UPLOAD_HINT}
+                disabled={items.length >= MAX_FILE_COUNT}
               />
               <Button
                 type={deepThink ? "primary" : "text"}

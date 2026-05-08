@@ -378,7 +378,21 @@ public class ChatAgent {
             ToolExecutionResultMessage resultMessage = ToolExecutionResultMessage.from(request, result);
             toolResults.add(resultMessage);
             addToMemory(resultMessage);
-            saveMessage(resultMessage);
+
+            // directAnswer 是「最终答案」工具：不应作为工具卡片展示给用户，
+            // 而应该把它的内容作为 AI 正文消息呈现。
+            // - tool 结果仍要保留在 chatMemory 中（保持 toolCall/toolResult 配对，避免下次请求报错）
+            // - 但不持久化 tool 消息、不通过 SSE 推 tool 卡片
+            // - 取 directAnswer 入参 `message`（优先）或返回值，作为 AI 文本消息保存+推送
+            if ("directAnswer".equals(request.name())) {
+                String answerText = extractDirectAnswerText(request.arguments(), result);
+                if (StringUtils.hasText(answerText)) {
+                    AiMessage synthetic = AiMessage.from(answerText);
+                    saveMessage(synthetic);
+                }
+            } else {
+                saveMessage(resultMessage);
+            }
         }
 
         String collect = toolResults
@@ -390,10 +404,40 @@ public class ChatAgent {
 
         refreshPendingMessages();
 
-        if (toolResults.stream().anyMatch(resp -> "terminate".equals(resp.toolName()))) {
+        // directAnswer / terminate 都是“任务已完成”信号：
+        // - terminate：明确的结束信号
+        // - directAnswer：模型表示本轮已给出答案、不需要再调其他工具
+        // 以前仅 terminate 才结束，导致“你是谁”这种简单问题也会多次 think 后才结束。
+        boolean shouldFinish = toolResults.stream()
+                .map(ToolExecutionResultMessage::toolName)
+                .anyMatch(name -> "terminate".equals(name) || "directAnswer".equals(name));
+        if (shouldFinish) {
             this.agentState = AgentState.FINISHED;
             log.info("任务结束");
         }
+    }
+
+    /**
+     * 从 directAnswer 工具的入参 / 返回值中解析出最终答案文本。
+     * 优先取入参 `message`（模型应把答案放这里），失败/为空时回退到工具返回字符串。
+     */
+    private String extractDirectAnswerText(String argumentsJson, String fallbackResult) {
+        try {
+            if (StringUtils.hasText(argumentsJson) && JSONUtil.isTypeJSONObject(argumentsJson)) {
+                JSONObject obj = JSONUtil.parseObj(argumentsJson);
+                String msg = obj.getStr("message");
+                if (StringUtils.hasText(msg)) {
+                    return msg;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("解析 directAnswer 入参失败: {}", argumentsJson, e);
+        }
+        // 回退：工具方法体本身返回的就是 message
+        if (fallbackResult != null && !"ok".equals(fallbackResult)) {
+            return fallbackResult;
+        }
+        return "";
     }
 
     /**

@@ -14,13 +14,13 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Slf4j
-public class GenImageTool implements ITool {
+public class FreeGenImageTool implements ITool {
 
     private static final String IMAGE_BASE_URL = "https://image.pollinations.ai/prompt/";
 
     @Override
     public String getName() {
-        return "genImageTool";
+        return "freeGenImageTool";
     }
 
     @Override

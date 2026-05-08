@@ -78,7 +78,9 @@ public class AttachmentContentExtractor {
      * @return 提取的文本（可能已截断）；无法提取或为图片时返回 null
      */
     public String extract(String fileUrl, String contentType) {
-        if (!StringUtils.hasLength(fileUrl)) return null;
+        if (!StringUtils.hasLength(fileUrl)) {
+            return null;
+        }
 
         // 仅允许 HTTPS，防止 SSRF 访问内网明文服务
         if (!fileUrl.startsWith("https://")) {
@@ -123,8 +125,14 @@ public class AttachmentContentExtractor {
                 AutoDetectParser parser  = new AutoDetectParser();
                 BodyContentHandler handler = new BodyContentHandler(MAX_TEXT_CHARS);
                 Metadata metadata        = new Metadata();
-                if (StringUtils.hasLength(contentType)) {
-                    // Tika 2.x: 用 TikaCoreProperties.CONTENT_TYPE_USER_OVERRIDE 提示类型
+                // 从 URL 尾部取文件名给 Tika 做扩展名提示（防止 OSS 返回 octet-stream 后 Tika 选错 parser）
+                String resourceName = extractResourceName(fileUrl);
+                if (StringUtils.hasLength(resourceName)) {
+                    metadata.set(TikaCoreProperties.RESOURCE_NAME_KEY, resourceName);
+                }
+                if (StringUtils.hasLength(contentType)
+                        && !"application/octet-stream".equalsIgnoreCase(contentType)) {
+                    // octet-stream 是“未知二进制”，传进去反而会误导 Tika。只在明确 MIME 时提示。
                     metadata.set(TikaCoreProperties.CONTENT_TYPE_USER_OVERRIDE, contentType);
                 }
 
@@ -149,18 +157,41 @@ public class AttachmentContentExtractor {
                 }
 
                 String text = handler.toString().strip();
+                log.info("[Tika] 解析完成 url={} detectedMime={} chars={} userHintMime={}",
+                        fileUrl, detected, text.length(), contentType);
                 return text.isEmpty() ? null : text;
             }
         } catch (Exception e) {
-            log.warn("[Tika] 提取失败 url={} err={}", fileUrl, e.getMessage());
+            // 打全栈，定位到底是 IO / SAX / Tika / 还是其他
+            log.warn("[Tika] 提取失败 url=" + fileUrl + " err=" + e.getClass().getSimpleName()
+                    + ":" + e.getMessage(), e);
             return null;
         } finally {
-            if (conn != null) conn.disconnect();
+            if (conn != null) {
+                conn.disconnect();
+            }
         }
     }
 
     private boolean isDenied(String mime) {
         return DENIED_MIME_PREFIXES.stream().anyMatch(mime::startsWith);
+    }
+
+    /**
+     * 从 URL 取最后一段路径作为文件名。
+     * 例：{@code https://oss/.../12345_web.md} → {@code 12345_web.md}。
+     * 拿不到返回 null。
+     */
+    private String extractResourceName(String url) {
+        try {
+            String path = URI.create(url).getPath();
+            if (path == null || path.isEmpty()) return null;
+            int slash = path.lastIndexOf('/');
+            String name = slash >= 0 ? path.substring(slash + 1) : path;
+            return name.isEmpty() ? null : name;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private boolean shouldSkip(String mime) {
@@ -181,18 +212,26 @@ public class AttachmentContentExtractor {
 
         @Override
         public int read() throws IOException {
-            if (remaining <= 0) return -1;
+            if (remaining <= 0) {
+                return -1;
+            }
             int b = super.read();
-            if (b >= 0) remaining--;
+            if (b >= 0) {
+                remaining--;
+            }
             return b;
         }
 
         @Override
         public int read(byte[] b, int off, int len) throws IOException {
-            if (remaining <= 0) return -1;
+            if (remaining <= 0) {
+                return -1;
+            }
             int toRead = (int) Math.min(len, remaining);
             int n = super.read(b, off, toRead);
-            if (n > 0) remaining -= n;
+            if (n > 0) {
+                remaining -= n;
+            }
             return n;
         }
 
