@@ -10,7 +10,11 @@ import {
 import type { KnowledgeBase } from "../types";
 import { useAuth } from "../contexts/AuthContext.tsx";
 
-export function useKnowledgeBases() {
+/**
+ * @param enabled 是否在挂载/enabled 切换时自动拉取一次。默认 true。
+ *   传 false 时调用方需要在合适时机自行调用 refreshKnowledgeBases()。
+ */
+export function useKnowledgeBases(enabled: boolean = true) {
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   // 是否完成过至少一次拉取，未加载时不应判定为「不存在」
   const [loaded, setLoaded] = useState(false);
@@ -35,8 +39,9 @@ export function useKnowledgeBases() {
       setLoaded(false);
       return;
     }
+    if (!enabled) return;
     refreshKnowledgeBases().then();
-  }, [user, refreshKnowledgeBases]);
+  }, [user, enabled, refreshKnowledgeBases]);
 
   const createKnowledgeBaseHandle = useCallback(
     async (request: CreateKnowledgeBaseRequest) => {

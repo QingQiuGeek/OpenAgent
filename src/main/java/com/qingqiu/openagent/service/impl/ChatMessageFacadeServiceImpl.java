@@ -92,8 +92,8 @@ public class ChatMessageFacadeServiceImpl implements ChatMessageFacadeService {
                         request.getAgentId(),
                         chatMessage.getSessionId(),
                         chatMessage.getContent(),
-                        Boolean.TRUE.equals(request.getDeepThink()),
-                        Boolean.TRUE.equals(request.getWebSearch())
+                        Boolean.TRUE.equals(request.getWebSearch()),
+                        UserContext.getUser()
                 )
         );
         // 返回生成的 chatMessageId

@@ -9,7 +9,7 @@
 - 文生图 √
 - pdf生成工具
 - 图片url有效期，上传到oss√
-- 输入框 mcp配置
+- mcpserver测试
 - A2A
 
 # AI智能体助手

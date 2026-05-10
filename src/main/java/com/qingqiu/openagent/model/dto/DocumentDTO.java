@@ -28,6 +28,12 @@ public class DocumentDTO {
 
     private MetaData metadata;
 
+    /** 处理状态：uploading / vectorizing / done / failed / skipped */
+    private String status;
+
+    /** 失败原因 */
+    private String errorMsg;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

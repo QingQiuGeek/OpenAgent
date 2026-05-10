@@ -7,10 +7,13 @@ import com.qingqiu.openagent.converter.ChatMessageConverter;
 import com.qingqiu.openagent.message.SseMessage;
 import com.qingqiu.openagent.model.dto.ChatMessageDTO;
 import com.qingqiu.openagent.model.dto.KnowledgeBaseDTO;
+import com.qingqiu.openagent.model.entity.AgentUsageLog;
 import com.qingqiu.openagent.model.response.CreateChatMessageResponse;
 import com.qingqiu.openagent.model.vo.ChatMessageVO;
+import com.qingqiu.openagent.service.AgentUsageLogService;
 import com.qingqiu.openagent.service.ChatMessageFacadeService;
 import com.qingqiu.openagent.service.SseService;
+import dev.langchain4j.model.output.TokenUsage;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
@@ -29,6 +32,7 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,16 +103,34 @@ public class ChatAgent {
     // AI 返回的，已经持久化，但是需要 sse 发给前端的消息
     private final List<ChatMessageDTO> pendingChatMessages = new ArrayList<>();
 
-    // 是否启用深度思考（保留字段，后续接入推理模型时使用）
-    @Setter
-    private boolean deepThink = false;
-
     // 是否启用联网搜索（仅作日志/标记用，工具注入逻辑在 ChatAgentFactory）
     @Setter
     private boolean webSearch = false;
 
     // 累计的来源引用（web 搜索 + 知识库召回）。每一轮 execute 后追加，下一轮 think 的最终回复会带上。
     private final List<ChatMessageDTO.Source> accumulatedSources = new ArrayList<>();
+
+    // ========== 用量埋点（agent_usage_log） ==========
+    /** 由 ChatAgentFactory 注入；为 null 表示不埋点。 */
+    @Setter
+    private AgentUsageLogService agentUsageLogService;
+
+    @Setter
+    private Long usageUserId;
+
+    @Setter
+    private Long usageModelId;
+
+    /** normal / agent / web_search ... */
+    @Setter
+    private String chatMode;
+
+    private long usageStartMs;
+    private int usagePromptTokens;
+    private int usageCompletionTokens;
+    private int usageTotalTokens;
+    private String usageStatus = "success";
+    private String usageErrorMsg;
 
     public ChatAgent() {
     }
@@ -268,7 +290,9 @@ public class ChatAgent {
     // 使用流式模型获取响应，并将文本增量通过 SSE 推送给前端
     private ChatResponse streamChat(ChatRequest request) {
         if (streamingChatModel == null) {
-            return chatModel.chat(request);
+            ChatResponse resp = chatModel.chat(request);
+            accumulateTokens(resp);
+            return resp;
         }
         CompletableFuture<ChatResponse> future = new CompletableFuture<>();
         streamingChatModel.chat(request, new StreamingChatResponseHandler() {
@@ -290,6 +314,7 @@ public class ChatAgent {
 
             @Override
             public void onCompleteResponse(ChatResponse completeResponse) {
+                accumulateTokens(completeResponse);
                 future.complete(completeResponse);
             }
 
@@ -309,16 +334,29 @@ public class ChatAgent {
     // thinkPrompt 应该放到 system 中还是
     private boolean think() {
         String webSearchHint = webSearch
-                ? "\n- 用户已开启「联网搜索」，遇到时效性、新闻、最新数据等问题时，请优先调用 webSearch 工具获取实时信息，并基于搜索结果回答。"
-                : "";
+                ? "\n- 用户已开启「联网搜索」，遇到时效性、新闻、最新数据等问题时，**必须**调用 webSearch 工具获取实时信息，再基于搜索结果回答；不要凭训练记忆作答。"
+                : "\n- 用户未开启联网搜索；如遇明显时效性问题（今天/最近/最新/当前/x 年 x 月以来等），请提示用户开启联网搜索或调用相关工具。";
+        // 把当前时间注入 prompt，避免模型用 2024 等过期数据回答时效性问题
+        String nowText = java.time.LocalDateTime.now()
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         String thinkPrompt = """
-                现在你是一个智能的的具体「决策模块」
+                现在你是OpenAgent智能体的具体「决策模块」
                 请根据当前对话上下文，决定下一步的动作。
                                 \s
                 【额外信息】
+                - 当前系统时间（**真实当前时间，请以此为准，不要使用训练数据中的旧时间**）：%s
                 - 你目前拥有的知识库列表以及描述：%s
                 - 如果有缺失的上下文时，优先从知识库中进行搜索%s
-                """.formatted(this.availableKbs, webSearchHint);
+
+                【输出规则（务必遵守）】
+                - 当上一步刚刚有「返回了具体内容」的工具（例如 webSearch、知识库检索、qwenGenerateImage 等）时，
+                  必须用 `directAnswer` 工具，把工具返回的关键信息（图片链接、引用、答案）原样写进 `message` 参数交给用户；
+                  不要直接 `terminate`，否则用户看不到任何输出。
+                - 调用 `directAnswer` 时，`message` 参数必须非空，且包含完整的最终答案；不要传空串或 "ok"。
+                - 仅当确实无内容可回（如已经在上一条回复里说完）才用 `terminate`。
+                - 涉及"今天/最近/最新/当前/x 年 x 月以来"等时效性问题时，先用上面的当前时间锚定时间范围；
+                  必要时调用 webSearch（用户已开启联网搜索）或时间工具校准，再回答。
+                """.formatted(nowText, this.availableKbs, webSearchHint);
 
             List<ChatMessage> requestMessages = new ArrayList<>(this.chatMemory);
             requestMessages.add(SystemMessage.from(thinkPrompt));
@@ -418,9 +456,45 @@ public class ChatAgent {
                 .map(ToolExecutionResultMessage::toolName)
                 .anyMatch(name -> "terminate".equals(name) || "directAnswer".equals(name));
         if (shouldFinish) {
+            // 兜底：模型直接 terminate 但本轮 AI 正文为空（没复述上一轮工具结果），
+            // 把最近一个有内容的工具返回（如 qwenGenerateImage 的 markdown）作为最终回复推给用户。
+            boolean onlyTerminate = toolResults.stream()
+                    .map(ToolExecutionResultMessage::toolName)
+                    .allMatch("terminate"::equals);
+            if (onlyTerminate
+                    && (this.lastAiMessage == null || !StringUtils.hasText(this.lastAiMessage.text()))) {
+                String fallback = findRecentToolResultText();
+                if (StringUtils.hasText(fallback)) {
+                    log.info("[ChatAgent] terminate 兜底：使用上一轮工具结果作为最终回复");
+                    AiMessage synthetic = AiMessage.from(fallback);
+                    saveMessage(synthetic);
+                    refreshPendingMessages();
+                }
+            }
             this.agentState = AgentState.FINISHED;
             log.info("任务结束");
         }
+    }
+
+    /**
+     * 从 chatMemory 倒序找最近一个「非 terminate / 非 directAnswer」工具的返回文本。
+     * 用于 terminate 时模型没复述工具结果的兜底。
+     */
+    private String findRecentToolResultText() {
+        // chatMemory 是 Deque，没有 get(int)；用 descendingIterator 从尾到头遍历
+        Iterator<ChatMessage> it = this.chatMemory.descendingIterator();
+        while (it.hasNext()) {
+            ChatMessage cm = it.next();
+            if (cm instanceof ToolExecutionResultMessage tr) {
+                String name = tr.toolName();
+                if ("terminate".equals(name) || "directAnswer".equals(name)) continue;
+                String text = tr.text();
+                if (StringUtils.hasText(text) && !"ok".equals(text)) {
+                    return text;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -526,6 +600,9 @@ public class ChatAgent {
         if (agentState != AgentState.IDLE) {
             throw new IllegalStateException("Agent is not idle");
         }
+        this.usageStartMs = System.currentTimeMillis();
+        this.usageStatus = "success";
+        this.usageErrorMsg = null;
 
         try {
             for (int i = 0; i < MAX_STEPS && agentState != AgentState.FINISHED; i++) {
@@ -546,6 +623,8 @@ public class ChatAgent {
             agentState = AgentState.FINISHED;
         } catch (Exception e) {
             agentState = AgentState.ERROR;
+            this.usageStatus = "error";
+            this.usageErrorMsg = e.getMessage();
             log.error("Error running agent", e);
             throw new RuntimeException("Error running agent", e);
         } finally {
@@ -562,6 +641,41 @@ public class ChatAgent {
             if (stopRegistry != null) {
                 stopRegistry.clear(this.chatSessionId);
             }
+            flushUsageLog();
+        }
+    }
+
+    /** 累加一次 ChatResponse 的 token。 */
+    private void accumulateTokens(ChatResponse resp) {
+        if (resp == null) return;
+        TokenUsage usage = resp.tokenUsage();
+        if (usage == null) return;
+        if (usage.inputTokenCount() != null) usagePromptTokens += usage.inputTokenCount();
+        if (usage.outputTokenCount() != null) usageCompletionTokens += usage.outputTokenCount();
+        if (usage.totalTokenCount() != null) usageTotalTokens += usage.totalTokenCount();
+    }
+
+    /** 写一条 agent_usage_log（异步，吞掉异常）。 */
+    private void flushUsageLog() {
+        if (agentUsageLogService == null || usageUserId == null) return;
+        try {
+            int latency = (int) (System.currentTimeMillis() - usageStartMs);
+            AgentUsageLog entry = AgentUsageLog.builder()
+                    .userId(usageUserId)
+                    .agentId(this.agentId)
+                    .sessionId(this.chatSessionId)
+                    .modelId(usageModelId)
+                    .chatMode(chatMode)
+                    .promptTokens(usagePromptTokens)
+                    .completionTokens(usageCompletionTokens)
+                    .totalTokens(usageTotalTokens)
+                    .latencyMs(latency)
+                    .status(usageStatus)
+                    .errorMsg(usageErrorMsg)
+                    .build();
+            agentUsageLogService.recordAsync(entry);
+        } catch (Exception e) {
+            log.warn("[AgentUsageLog] flush failed: {}", e.getMessage());
         }
     }
 

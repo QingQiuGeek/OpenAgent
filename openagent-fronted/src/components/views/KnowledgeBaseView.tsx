@@ -10,28 +10,55 @@ import {
   Space,
   message,
   Empty,
+  Tag,
+  Tooltip,
 } from "antd";
 import {
   BookOutlined,
   UploadOutlined,
   DeleteOutlined,
   FileOutlined,
+  ArrowLeftOutlined,
+  LoadingOutlined,
+  SyncOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  MinusCircleOutlined,
 } from "@ant-design/icons";
 import type { UploadProps } from "antd";
 import { useKnowledgeBases } from "../../hooks/useKnowledgeBases.ts";
 import { useDocuments } from "../../hooks/useDocuments.ts";
-import { uploadDocument, type DocumentVO } from "../../api/api.ts";
+import { uploadDocument, type DocumentVO, EnumType } from "../../api/api.ts";
+import { useEnumOptions } from "../../hooks/useEnumOptions.ts";
 
 const { Title, Text, Paragraph } = Typography;
 
-const KnowledgeBaseView: React.FC = () => {
-  const { knowledgeBaseId } = useParams<{ knowledgeBaseId?: string }>();
+interface KnowledgeBaseViewProps {
+  /** 外部传入的 kb id，优先级高于 useParams（用于嵌入列表页） */
+  knowledgeBaseId?: string;
+  /** 提供时在顶部渲染“返回”按钮。 */
+  onBack?: () => void;
+}
+
+const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
+  knowledgeBaseId: kbIdProp,
+  onBack,
+}) => {
+  const params = useParams<{ knowledgeBaseId?: string }>();
+  const knowledgeBaseId = kbIdProp ?? params.knowledgeBaseId;
   const { knowledgeBases, loaded, refreshKnowledgeBases } =
     useKnowledgeBases();
   const { documents, loading, refreshDocuments, deleteDocument } =
     useDocuments(knowledgeBaseId);
 
   const [uploading, setUploading] = useState(false);
+
+  // 从 enum_config 动态拉取支持的文件扩展名
+  const { options: fileTypes } = useEnumOptions(EnumType.DocumentFileType);
+  const KB_ACCEPT_STR = useMemo(
+    () => fileTypes.map((t) => `.${t.toLowerCase()}`).join(","),
+    [fileTypes],
+  );
 
   // 查找当前知识库的详细信息
   const currentKnowledgeBase = useMemo(() => {
@@ -49,6 +76,22 @@ const KnowledgeBaseView: React.FC = () => {
       refreshKnowledgeBases().catch(() => {});
     }
   }, [knowledgeBaseId, loaded, currentKnowledgeBase, refreshKnowledgeBases]);
+
+  // 状态轮询：当存在 uploading / vectorizing 的文档时每 2s 拉取一次
+  const hasPending = useMemo(() => {
+    return documents.some((d) => {
+      const s = (d.status || "done").toLowerCase();
+      return s === "uploading" || s === "vectorizing";
+    });
+  }, [documents]);
+
+  useEffect(() => {
+    if (!knowledgeBaseId || !hasPending) return;
+    const t = setInterval(() => {
+      refreshDocuments().catch(() => {});
+    }, 2000);
+    return () => clearInterval(t);
+  }, [knowledgeBaseId, hasPending, refreshDocuments]);
 
   // 处理文件上传
   const handleUpload: UploadProps["customRequest"] = async (options) => {
@@ -100,14 +143,60 @@ const KnowledgeBaseView: React.FC = () => {
       title: "类型",
       dataIndex: "filetype",
       key: "filetype",
-      width: 120,
+      width: 100,
     },
     {
       title: "大小",
       dataIndex: "size",
       key: "size",
-      width: 120,
+      width: 110,
       render: (size: number) => formatFileSize(size),
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 130,
+      render: (status: string | undefined, record: DocumentVO) => {
+        const s = (status || "done").toLowerCase();
+        if (s === "uploading") {
+          return (
+            <Tag icon={<LoadingOutlined />} color="processing">
+              上传中
+            </Tag>
+          );
+        }
+        if (s === "vectorizing") {
+          return (
+            <Tag icon={<SyncOutlined spin />} color="orange">
+              向量化中
+            </Tag>
+          );
+        }
+        if (s === "failed") {
+          return (
+            <Tooltip title={record.errorMsg || "处理失败"}>
+              <Tag icon={<CloseCircleOutlined />} color="error">
+                失败
+              </Tag>
+            </Tooltip>
+          );
+        }
+        if (s === "skipped") {
+          return (
+            <Tooltip title="非 Markdown，未入向量库">
+              <Tag icon={<MinusCircleOutlined />} color="default">
+                已跳过
+              </Tag>
+            </Tooltip>
+          );
+        }
+        return (
+          <Tag icon={<CheckCircleOutlined />} color="success">
+            已完成
+          </Tag>
+        );
+      },
     },
     {
       title: "操作",
@@ -181,8 +270,15 @@ const KnowledgeBaseView: React.FC = () => {
 
   // 显示知识库详情和文档列表
   return (
-    <div className="flex flex-col h-full p-6 overflow-y-auto">
-      <div className="max-w-6xl w-full mx-auto">
+    <div className={onBack ? "flex flex-col" : "flex flex-col h-full p-6 overflow-y-auto"}>
+      <div className={onBack ? "w-full" : "max-w-6xl w-full mx-auto"}>
+        {onBack && (
+          <div className="mb-3">
+            <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
+              返回知识库列表
+            </Button>
+          </div>
+        )}
         <div className="mb-3">
           <Card>
             <div className="flex items-start gap-4">
@@ -208,32 +304,29 @@ const KnowledgeBaseView: React.FC = () => {
         {/* 知识库信息卡片 */}
 
         <div className="mb-3">
-          {/* 上传文档区域 */}
-          <Card title="上传文档">
-            <Upload
-              customRequest={handleUpload}
-              showUploadList={false}
-              accept=".md"
-              disabled={uploading}
-            >
-              <Button
-                type="primary"
-                icon={<UploadOutlined />}
-                loading={uploading}
-                size="large"
+          {/* 上传 + 文档列表 合并卡片 */}
+          <Card
+            title={`文档列表 (${documents.length})`}
+            extra={
+              <Upload
+                customRequest={handleUpload}
+                showUploadList={false}
+                accept={KB_ACCEPT_STR}
+                disabled={uploading}
               >
-                选择文件上传
-              </Button>
-            </Upload>
-            <Text type="secondary" className="block mt-2 text-xs">
-              支持格式: Markdown
+                <Button
+                  type="primary"
+                  icon={<UploadOutlined />}
+                  loading={uploading}
+                >
+                  上传文档
+                </Button>
+              </Upload>
+            }
+          >
+            <Text type="secondary" className="block mb-3 text-xs">
+              所有支持的类型都会被向量化入库。.md 按标题切段，其他文档用 Tika 抽取后做弹性分段。
             </Text>
-          </Card>
-        </div>
-
-        <div className="mb-3">
-          {/* 文档列表 */}
-          <Card title={`文档列表 (${documents.length})`}>
             {loading ? (
               <div className="text-center py-8">
                 <Text type="secondary">加载中...</Text>
@@ -249,7 +342,6 @@ const KnowledgeBaseView: React.FC = () => {
                 rowKey="id"
                 pagination={{
                   pageSize: 10,
-                  // showSizeChanger: true,
                   showTotal: (total) => `共 ${total} 条`,
                 }}
               />

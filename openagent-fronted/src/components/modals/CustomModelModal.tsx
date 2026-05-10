@@ -1,10 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Form, Input, InputNumber, Modal, Select } from "antd";
-import {
-  type CreateModelRequest,
-  type ProviderTypeVO,
-  getProviderTypes,
-} from "../../api/api.ts";
+import { type CreateModelRequest, EnumType } from "../../api/api.ts";
+import { useEnumOptions } from "../../hooks/useEnumOptions";
 
 interface CustomModelModalProps {
   open: boolean;
@@ -23,17 +20,12 @@ const CustomModelModal: React.FC<CustomModelModalProps> = ({
 }) => {
   const [form] = Form.useForm<CreateModelRequest>();
   const [submitting, setSubmitting] = useState(false);
-  const [providers, setProviders] = useState<ProviderTypeVO[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(false);
-
-  // 仅打开时拉一次 provider 列表
-  useEffect(() => {
-    if (!open) return;
-    setProvidersLoading(true);
-    getProviderTypes()
-      .then((list) => setProviders(list))
-      .finally(() => setProvidersLoading(false));
-  }, [open]);
+  // 仅在 Modal 打开后启用；Select 下拉打开时额外强制刷新一次，保证能拿到最新的枚举值
+  const {
+    options: providers,
+    loading: providersLoading,
+    reload: reloadProviders,
+  } = useEnumOptions(EnumType.ModelProviderType, open);
 
   // 关闭时重置表单
   useEffect(() => {
@@ -87,10 +79,10 @@ const CustomModelModal: React.FC<CustomModelModalProps> = ({
           <Select
             placeholder="选择厂商"
             loading={providersLoading}
-            options={providers.map((p) => ({
-              value: p.code,
-              label: `${p.description}（${p.code}）`,
-            }))}
+            options={providers.map((code) => ({ value: code, label: code }))}
+            onDropdownVisibleChange={(visible) => {
+              if (visible) reloadProviders(true);
+            }}
           />
         </Form.Item>
         <Form.Item

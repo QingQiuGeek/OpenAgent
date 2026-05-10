@@ -1,17 +1,17 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Attachments, Sender } from "@ant-design/x";
 import { Button, message as antdMessage } from "antd";
-import {
-  PaperClipOutlined,
-  BulbOutlined,
-  GlobalOutlined,
-} from "@ant-design/icons";
+import { PaperClipOutlined, GlobalOutlined } from "@ant-design/icons";
 import type { GetProp, GetRef } from "antd";
-import { uploadFile, type UploadFileResponse } from "../../../api/api";
+import {
+  uploadFile,
+  type UploadFileResponse,
+  EnumType,
+} from "../../../api/api";
+import { useEnumOptions } from "../../../hooks/useEnumOptions";
 
 export interface ChatInputSubmitPayload {
   text: string;
-  deepThink: boolean;
   webSearch: boolean;
   /** 已经上传成功的附件元数据（粘贴/选择时即上传，发送时只携带元数据） */
   uploadedAttachments: UploadFileResponse[];
@@ -21,43 +21,11 @@ interface AgentChatInputProps {
   onSend: (payload: ChatInputSubmitPayload) => void;
   isAgentRunning?: boolean;
   onStop?: () => void;
+  /** 受控：联网搜索是否选中（由父级跨会话保留） */
+  webSearch?: boolean;
+  onWebSearchChange?: (v: boolean) => void;
 }
 
-// 支持的文件扩展名（含图片）
-const ACCEPT_EXTS = [
-  ".xlsx",
-  ".xls",
-  ".doc",
-  ".docx",
-  ".md",
-  ".txt",
-  ".pdf",
-  ".java",
-  ".js",
-  ".jsx",
-  ".ts",
-  ".tsx",
-  ".py",
-  ".go",
-  ".rs",
-  ".cpp",
-  ".c",
-  ".h",
-  ".cs",
-  ".rb",
-  ".php",
-  ".sql",
-  ".json",
-  ".yaml",
-  ".yml",
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".webp",
-];
-
-const ACCEPT_STR = ACCEPT_EXTS.join(",");
 /** 单文件大小上限（MB），与后端 FileController.MAX_FILE_SIZE_BYTES 对齐 */
 const MAX_FILE_SIZE_MB = 5;
 /** 单条消息附件数量上限 */
@@ -75,12 +43,28 @@ const AgentChatInput: React.FC<AgentChatInputProps> = ({
   onSend,
   isAgentRunning = false,
   onStop,
+  webSearch: webSearchProp,
+  onWebSearchChange,
 }) => {
   const [message, setMessage] = useState("");
-  const [deepThink, setDeepThink] = useState(false);
-  const [webSearch, setWebSearch] = useState(false);
+  // 兼容受控 / 非受控：父级传 webSearch 时受控，否则使用本地 state
+  const [innerWebSearch, setInnerWebSearch] = useState(false);
+  const isWebSearchControlled = webSearchProp !== undefined;
+  const webSearch = isWebSearchControlled ? !!webSearchProp : innerWebSearch;
+  const setWebSearch = (v: boolean) => {
+    if (!isWebSearchControlled) setInnerWebSearch(v);
+    onWebSearchChange?.(v);
+  };
   const [items, setItems] = useState<AttachmentItem[]>([]);
   const attachmentsRef = useRef<GetRef<typeof Attachments>>(null);
+
+  // 上传可接受类型从 enum_config.upload_filetype 动态拉取（含图片）
+  const { options: uploadTypes } = useEnumOptions(EnumType.UploadFileType);
+  const ACCEPT_EXTS = useMemo(
+    () => uploadTypes.map((t) => `.${t.toLowerCase()}`),
+    [uploadTypes],
+  );
+  const ACCEPT_STR = useMemo(() => ACCEPT_EXTS.join(","), [ACCEPT_EXTS]);
 
   const handleSubmit = () => {
     if (isAgentRunning) return;
@@ -98,7 +82,6 @@ const AgentChatInput: React.FC<AgentChatInputProps> = ({
       .filter((m): m is UploadFileResponse => !!m);
     onSend({
       text: trimmed,
-      deepThink,
       webSearch,
       uploadedAttachments,
     });
@@ -252,19 +235,10 @@ const AgentChatInput: React.FC<AgentChatInputProps> = ({
                 disabled={items.length >= MAX_FILE_COUNT}
               />
               <Button
-                type={deepThink ? "primary" : "text"}
-                size="small"
-                icon={<BulbOutlined />}
-                onClick={() => setDeepThink((v) => !v)}
-                className={deepThink ? "" : "!text-gray-600"}
-              >
-                深度思考
-              </Button>
-              <Button
                 type={webSearch ? "primary" : "text"}
                 size="small"
                 icon={<GlobalOutlined />}
-                onClick={() => setWebSearch((v) => !v)}
+                onClick={() => setWebSearch(!webSearch)}
                 className={webSearch ? "" : "!text-gray-600"}
               >
                 联网搜索

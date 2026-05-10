@@ -1,12 +1,23 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Actions } from "@ant-design/x";
-import { message as antdMessage } from "antd";
+import { Button, Popover, Checkbox, Input, message as antdMessage } from "antd";
 import {
   CopyOutlined,
   DeleteOutlined,
   ReloadOutlined,
+  LikeOutlined,
+  LikeFilled,
+  DislikeOutlined,
+  DislikeFilled,
 } from "@ant-design/icons";
 import type { ChatMessageVO } from "../../../types";
+import {
+  getFeedback,
+  submitFeedback,
+  withdrawFeedback,
+} from "../../../api/chatFeedback";
+
+const REASON_TAGS = ["不准确", "不相关", "格式差", "太冗长", "太简短", "其他"];
 
 interface MessageActionsProps {
   message: ChatMessageVO;
@@ -44,6 +55,120 @@ const MessageActions: React.FC<MessageActionsProps> = ({
 
   const showRetry =
     message.role === "assistant" && typeof onRetry === "function";
+  const showFeedback = message.role === "assistant";
+
+  // 反馈状态：0=未评价 / 1=赞 / -1=踩
+  const [rating, setRating] = useState<0 | 1 | -1>(0);
+  const [reasonTags, setReasonTags] = useState<string[]>([]);
+  const [comment, setComment] = useState("");
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // 加载初始反馈
+  useEffect(() => {
+    if (!showFeedback) return;
+    let cancelled = false;
+    getFeedback(message.id)
+      .then((vo) => {
+        if (cancelled || !vo) return;
+        setRating((vo.rating === 1 || vo.rating === -1 ? vo.rating : 0) as 0 | 1 | -1);
+        setReasonTags(vo.reasonTags ?? []);
+        setComment(vo.comment ?? "");
+      })
+      .catch(() => {
+        // 忽略：没反馈也不是错误
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [message.id, showFeedback]);
+
+  const submit = async (next: 1 | -1, tags?: string[], cmt?: string) => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await submitFeedback({
+        messageId: message.id,
+        rating: next,
+        reasonTags: tags,
+        comment: cmt,
+      });
+      setRating(next);
+      antdMessage.success("反馈已提交");
+    } catch {
+      // http 层已 toast
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const withdraw = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await withdrawFeedback(message.id);
+      setRating(0);
+      setReasonTags([]);
+      setComment("");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleLike = () => {
+    if (rating === 1) {
+      void withdraw();
+    } else {
+      void submit(1);
+    }
+  };
+
+  const handleDislikeOpen = (open: boolean) => {
+    setReasonOpen(open);
+    if (open && rating !== -1) {
+      // 首次点踩：先写入 -1，再补充原因
+      void submit(-1);
+    }
+  };
+
+  const reasonContent = (
+    <div className="w-64">
+      <div className="text-xs text-gray-500 mb-2">为什么踩？（可选）</div>
+      <Checkbox.Group
+        options={REASON_TAGS}
+        value={reasonTags}
+        onChange={(vals) => setReasonTags(vals as string[])}
+        className="!flex !flex-wrap !gap-y-1"
+      />
+      <Input.TextArea
+        rows={2}
+        placeholder="补充说明（可选）"
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        className="!mt-2"
+        maxLength={200}
+      />
+      <div className="flex justify-end gap-2 mt-2">
+        <Button size="small" onClick={() => { setReasonOpen(false); }}>
+          取消
+        </Button>
+        <Button size="small" danger onClick={async () => { await withdraw(); setReasonOpen(false); }}>
+          撤销踩
+        </Button>
+        <Button
+          size="small"
+          type="primary"
+          loading={submitting}
+          onClick={async () => {
+            await submit(-1, reasonTags, comment);
+            setReasonOpen(false);
+          }}
+        >
+          提交
+        </Button>
+      </div>
+    </div>
+  );
 
   const items = [
     {
@@ -73,11 +198,37 @@ const MessageActions: React.FC<MessageActionsProps> = ({
 
   return (
     <div
-      className={`flex h-6 items-center -mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${
+      className={`flex h-6 items-center gap-1 -mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 ${
         align === "end" ? "justify-end" : "justify-start"
       }`}
     >
       <Actions items={items} variant="borderless" />
+      {showFeedback && (
+        <>
+          <Button
+            size="small"
+            type="text"
+            icon={rating === 1 ? <LikeFilled className="!text-blue-500" /> : <LikeOutlined />}
+            onClick={handleLike}
+            disabled={submitting}
+          />
+          <Popover
+            placement="top"
+            trigger="click"
+            open={reasonOpen}
+            onOpenChange={handleDislikeOpen}
+            content={reasonContent}
+            destroyOnHidden
+          >
+            <Button
+              size="small"
+              type="text"
+              icon={rating === -1 ? <DislikeFilled className="!text-red-500" /> : <DislikeOutlined />}
+              disabled={submitting}
+            />
+          </Popover>
+        </>
+      )}
     </div>
   );
 };

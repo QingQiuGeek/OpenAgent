@@ -6,23 +6,29 @@ import com.qingqiu.openagent.util.AttachmentContentExtractor;
 import com.qingqiu.openagent.converter.AgentConverter;
 import com.qingqiu.openagent.converter.ChatMessageConverter;
 import com.qingqiu.openagent.converter.KnowledgeBaseConverter;
+import com.qingqiu.openagent.agent.mcp.McpClientPool;
 import com.qingqiu.openagent.mapper.AgentMapper;
 import com.qingqiu.openagent.mapper.KnowledgeBaseMapper;
+import com.qingqiu.openagent.mapper.McpServerMapper;
+import com.qingqiu.openagent.model.entity.McpServer;
 import com.qingqiu.openagent.model.dto.AgentDTO;
 import com.qingqiu.openagent.model.dto.ChatMessageDTO;
 import com.qingqiu.openagent.model.dto.KnowledgeBaseDTO;
 import com.qingqiu.openagent.model.entity.Agent;
 import com.qingqiu.openagent.model.entity.KnowledgeBase;
+import com.qingqiu.openagent.service.AgentUsageLogService;
 import com.qingqiu.openagent.service.ChatMessageFacadeService;
 import com.qingqiu.openagent.service.DynamicChatModelService;
 import com.qingqiu.openagent.service.SseService;
 import com.qingqiu.openagent.service.ToolFacadeService;
+import com.qingqiu.openagent.util.UserContext;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -57,6 +63,9 @@ public class ChatAgentFactory {
     private final ObjectMapper objectMapper;
     private final AgentStopRegistry agentStopRegistry;
     private final AttachmentContentExtractor attachmentExtractor;
+    private final AgentUsageLogService agentUsageLogService;
+    private final McpServerMapper mcpServerMapper;
+    private final McpClientPool mcpClientPool;
 
     // 运行时 Agent 配置
     private AgentDTO agentConfig;
@@ -73,7 +82,10 @@ public class ChatAgentFactory {
             ChatMessageConverter chatMessageConverter,
             ObjectMapper objectMapper,
             AgentStopRegistry agentStopRegistry,
-            AttachmentContentExtractor attachmentExtractor
+            AttachmentContentExtractor attachmentExtractor,
+            AgentUsageLogService agentUsageLogService,
+            McpServerMapper mcpServerMapper,
+            McpClientPool mcpClientPool
     ) {
         this.dynamicChatModelService = dynamicChatModelService;
         this.sseService = sseService;
@@ -87,6 +99,9 @@ public class ChatAgentFactory {
         this.objectMapper = objectMapper;
         this.agentStopRegistry = agentStopRegistry;
         this.attachmentExtractor = attachmentExtractor;
+        this.agentUsageLogService = agentUsageLogService;
+        this.mcpServerMapper = mcpServerMapper;
+        this.mcpClientPool = mcpClientPool;
     }
 
     private Agent loadAgent(String agentId) {
@@ -258,6 +273,45 @@ public class ChatAgentFactory {
         return new LangChainToolExecutor(runtimeITools, objectMapper);
     }
 
+    /** 扫描 allowed_tools 中以 "mcp:{id}" 开头的条目，加载该用户已启用的 MCP 客户端。 */
+    private List<McpClient> resolveMcpClients(AgentDTO agentConfig, Long ownerUserId) {
+        List<String> allowed = agentConfig.getAllowedTools();
+        if (allowed == null || allowed.isEmpty()) return Collections.emptyList();
+        List<McpClient> clients = new ArrayList<>();
+        for (String name : allowed) {
+            if (name == null || !name.startsWith("mcp:")) continue;
+            String idStr = name.substring("mcp:".length());
+            Long mcpId;
+            try {
+                mcpId = Long.parseLong(idStr.trim());
+            } catch (NumberFormatException e) {
+                log.warn("[Agent] 非法 mcp 引用: {}", name);
+                continue;
+            }
+            try {
+                McpServer server = mcpServerMapper.selectById(mcpId);
+                if (server == null) {
+                    log.warn("[Agent] mcp#{} 不存在，跳过", mcpId);
+                    continue;
+                }
+                if (server.getEnabled() != null && server.getEnabled() == 0) {
+                    log.info("[Agent] mcp#{} 已禁用，跳过", mcpId);
+                    continue;
+                }
+                if (ownerUserId != null && server.getUserId() != null
+                        && !ownerUserId.equals(server.getUserId())) {
+                    log.warn("[Agent] mcp#{} 不属于 agent 所有者 (user={})，跳过", mcpId, ownerUserId);
+                    continue;
+                }
+                McpClient client = mcpClientPool.acquire(server);
+                clients.add(client);
+            } catch (Exception e) {
+                log.warn("[Agent] 加载 mcp#{} 失败，跳过: {}", mcpId, e.getMessage());
+            }
+        }
+        return clients;
+    }
+
     private ChatAgent buildAgentRuntime(
             Agent agent,
             List<ChatMessage> memory,
@@ -290,10 +344,9 @@ public class ChatAgentFactory {
     /**
      * 创建一个 OpenAgent 实例。
      *
-     * @param deepThink 是否启用深度思考（保留给后续接入推理模型用）
      * @param webSearch 是否启用联网搜索（true 时把 WebSearchTool 加入运行时工具集）
      */
-    public ChatAgent create(String agentId, String chatSessionId, boolean deepThink, boolean webSearch) {
+    public ChatAgent create(String agentId, String chatSessionId, boolean webSearch) {
         Agent agent = loadAgent(agentId);
         AgentDTO agentConfig = toAgentConfig(agent);
         List<ChatMessage> memory = loadMemory(chatSessionId);
@@ -320,6 +373,12 @@ public class ChatAgentFactory {
         // 构建 LangChain4j 工具执行器
         LangChainToolExecutor toolExecutor = buildToolExecutor(runtimeITools);
 
+        // MCP 工具注入：从 allowed_tools 中识别 mcp:{id} 条目
+        List<McpClient> mcpClients = resolveMcpClients(agentConfig, agent.getUserId());
+        if (!mcpClients.isEmpty()) {
+            toolExecutor.addMcpTools(mcpClients);
+        }
+
         ChatAgent chatAgent = buildAgentRuntime(
                 agent,
                 memory,
@@ -327,13 +386,19 @@ public class ChatAgentFactory {
                 toolExecutor,
                 chatSessionId
         );
-        chatAgent.setDeepThink(deepThink);
         chatAgent.setWebSearch(webSearch);
+
+        // ===== 用量埋点：注入 service + 关键上下文 =====
+        chatAgent.setAgentUsageLogService(agentUsageLogService);
+        chatAgent.setUsageUserId(UserContext.getUser());
+        chatAgent.setUsageModelId(agent.getModelId());
+        chatAgent.setChatMode(webSearch ? "web_search" : "normal");
+
         return chatAgent;
     }
 
     /** 兼容旧签名 */
     public ChatAgent create(String agentId, String chatSessionId) {
-        return create(agentId, chatSessionId, false, false);
+        return create(agentId, chatSessionId, false);
     }
 }

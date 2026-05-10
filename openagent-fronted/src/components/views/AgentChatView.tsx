@@ -15,6 +15,7 @@ import {
   type ToolVO,
   type UploadFileResponse,
 } from "../../api/api.ts";
+import { listMyMcpToolGroups, type McpToolGroupVO } from "../../api/mcpServer.ts";
 import { useAgents } from "../../hooks/useAgents.ts";
 import { useChatSessions } from "../../hooks/useChatSessions.ts";
 import { useKnowledgeBases } from "../../hooks/useKnowledgeBases.ts";
@@ -28,7 +29,11 @@ const AgentChatView: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as
-    | { initMessage?: string; initAttachments?: UploadFileResponse[] }
+    | {
+        initMessage?: string;
+        initAttachments?: UploadFileResponse[];
+        initWebSearch?: boolean;
+      }
     | null;
   const [loading, setLoading] = useState(false);
   const { agents } = useAgents();
@@ -69,13 +74,47 @@ const AgentChatView: React.FC = () => {
   // 知识库列表（复用全局 hook，避免重复拉取）
   const { knowledgeBases: allKbs } = useKnowledgeBases();
 
-  // 当前 agent 绑定的工具：按 allowedTools 按名称过滤，未加载完之前返回空数组
+  // 联网搜索按钮选中状态：提升到本组件，跨「新建会话 -> 进入会话」路由变化保持
+  const [webSearchOn, setWebSearchOn] = useState(false);
+
+  // 当前用户已启用的 MCP 工具分组：用于 ChatHeader 展示 agent 绑定的 MCP 服务
+  const [allMcpGroups, setAllMcpGroups] = useState<McpToolGroupVO[]>([]);
+  useEffect(() => {
+    if (!user) return;
+    listMyMcpToolGroups()
+      .then(setAllMcpGroups)
+      .catch((err) => console.error("[AgentChatView] 获取 MCP 列表失败:", err));
+  }, [user]);
+
+  // 当前 agent 绑定的工具：按 allowedTools 按名称过滤；mcp:xxx 引用走 MCP 列表
   const headerTools = useMemo(() => {
     if (!activeAgent || !activeAgent.allowedTools?.length) return [];
     return allTools
       .filter((t) => activeAgent.allowedTools!.includes(t.name))
       .map((t) => ({ name: t.name, description: t.description }));
   }, [activeAgent, allTools]);
+
+  // 当前 agent 绑定的 MCP 服务：从 allowedTools 里取 `mcp:${mcpServerId}` 引用并匹配分组
+  const headerMcps = useMemo(() => {
+    if (!activeAgent || !activeAgent.allowedTools?.length) return [];
+    const ids = new Set<number>();
+    for (const ref of activeAgent.allowedTools) {
+      if (typeof ref === "string" && ref.startsWith("mcp:")) {
+        const n = Number(ref.slice(4));
+        if (!Number.isNaN(n)) ids.add(n);
+      }
+    }
+    if (ids.size === 0) return [];
+    return allMcpGroups
+      .filter((g) => ids.has(g.mcpServerId))
+      .map((g) => ({
+        name: g.mcpServerName,
+        description:
+          g.toolNames && g.toolNames.length > 0
+            ? `${g.transport} · ${g.toolNames.join(", ")}`
+            : g.transport,
+      }));
+  }, [activeAgent, allMcpGroups]);
 
   // 当前 agent 绑定的知识库：按 allowedKbs (id) 过滤
   const headerKbs = useMemo(() => {
@@ -113,6 +152,7 @@ const AgentChatView: React.FC = () => {
   useEffect(() => {
     const initMsg = state?.initMessage;
     const initAttachments = state?.initAttachments;
+    const initWebSearch = state?.initWebSearch;
     if (!chatSessionId || !initMsg) return;
     // 清除 location state，防止重复发送
     navigate(location.pathname, { replace: true, state: {} });
@@ -124,6 +164,7 @@ const AgentChatView: React.FC = () => {
       sessionId: chatSessionId,
       role: "user",
       content: initMsg,
+      webSearch: initWebSearch,
       metadata:
         initAttachments && initAttachments.length > 0
           ? { attachments: initAttachments }
@@ -142,14 +183,12 @@ const AgentChatView: React.FC = () => {
       | string
       | {
           text: string;
-          deepThink?: boolean;
           webSearch?: boolean;
           /** 已经上传成功的附件元数据（粘贴/选择即上传，发送只携带元数据） */
           uploadedAttachments?: UploadFileResponse[];
         },
   ) => {
     const text = typeof value === "string" ? value : value.text;
-    const deepThink = typeof value === "string" ? false : !!value.deepThink;
     const webSearch = typeof value === "string" ? false : !!value.webSearch;
     const uploadedAttachments =
       typeof value === "string" ? [] : value.uploadedAttachments ?? [];
@@ -161,7 +200,11 @@ const AgentChatView: React.FC = () => {
     }
 
     if (!activeAgentId) {
-      antdMessage.warning("请先选择智能体！");
+      if (agents.length === 0) {
+        antdMessage.warning("还没有智能体，请点击左侧「+ 智能体助手」创建一个");
+      } else {
+        antdMessage.warning("请先在左侧选择一个智能体！");
+      }
       return;
     }
 
@@ -179,6 +222,7 @@ const AgentChatView: React.FC = () => {
           state: {
             initMessage: text,
             initAttachments: uploadedAttachments,
+            initWebSearch: webSearch,
           },
         });
       } catch (error) {
@@ -196,7 +240,6 @@ const AgentChatView: React.FC = () => {
           sessionId: chatSessionId,
           role: "user",
           content: text,
-          deepThink,
           webSearch,
           metadata:
             uploadedAttachments.length > 0
@@ -341,6 +384,7 @@ const AgentChatView: React.FC = () => {
           subtitle={headerSubtitle}
           description={headerDescription}
           tools={activeAgent ? headerTools : undefined}
+          mcpServers={activeAgent ? headerMcps : undefined}
           knowledgeBases={activeAgent ? headerKbs : undefined}
         />
         <div className="flex-1 min-h-0">
@@ -348,6 +392,8 @@ const AgentChatView: React.FC = () => {
             agents={agents}
             loading={loading}
             handleSendMessage={handleSendMessage}
+            webSearch={webSearchOn}
+            onWebSearchChange={setWebSearchOn}
           />
         </div>
       </div>
@@ -361,6 +407,7 @@ const AgentChatView: React.FC = () => {
         subtitle={headerSubtitle}
         description={headerDescription}
         tools={activeAgent ? headerTools : undefined}
+        mcpServers={activeAgent ? headerMcps : undefined}
         knowledgeBases={activeAgent ? headerKbs : undefined}
       />
       <AgentChatHistory
@@ -380,6 +427,8 @@ const AgentChatView: React.FC = () => {
             onSend={handleSendMessage}
             isAgentRunning={isAgentRunning}
             onStop={handleStopAgent}
+            webSearch={webSearchOn}
+            onWebSearchChange={setWebSearchOn}
           />
         </div>
       </div>

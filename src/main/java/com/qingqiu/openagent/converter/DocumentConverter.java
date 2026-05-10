@@ -36,6 +36,8 @@ public class DocumentConverter {
                 .metadata(documentDTO.getMetadata() != null 
                         ? objectMapper.writeValueAsString(documentDTO.getMetadata()) 
                         : null)
+                .status(documentDTO.getStatus())
+                .errorMsg(documentDTO.getErrorMsg())
                 .createdAt(documentDTO.getCreatedAt())
                 .updatedAt(documentDTO.getUpdatedAt())
                 .build();
@@ -54,6 +56,8 @@ public class DocumentConverter {
                 .metadata(document.getMetadata() != null 
                         ? objectMapper.readValue(document.getMetadata(), DocumentDTO.MetaData.class) 
                         : null)
+                .status(document.getStatus())
+                .errorMsg(document.getErrorMsg())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
                 .build();
@@ -67,6 +71,8 @@ public class DocumentConverter {
                 .filename(dto.getFilename())
                 .filetype(dto.getFiletype())
                 .size(dto.getSize())
+                .status(dto.getStatus())
+                .errorMsg(dto.getErrorMsg())
                 .build();
     }
 

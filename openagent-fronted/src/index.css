@@ -291,3 +291,9 @@ html.dark .markdown-body table tr:nth-child(even) td { background: #1f1f23; }
 .markdown-body strong { font-weight: 600; }
 .markdown-body em { font-style: italic; }
 .markdown-body del { text-decoration: line-through; color: #6b7280; }
+
+/* SideMenu Tabs 均分宽度（智能体助手 / 聊天记录） */
+.side-menu-tabs .ant-tabs-nav-list { width: 100%; }
+.side-menu-tabs .ant-tabs-tab { flex: 1 1 0; justify-content: center; margin: 0 !important; }
+.side-menu-tabs .ant-tabs-tab + .ant-tabs-tab { margin-left: 0 !important; }
+

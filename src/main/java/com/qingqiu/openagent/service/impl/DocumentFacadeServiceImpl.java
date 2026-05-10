@@ -5,11 +5,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.qingqiu.openagent.converter.DocumentConverter;
 import com.qingqiu.openagent.enums.BizExceptionEnum;
 import com.qingqiu.openagent.exception.BizException;
-import com.qingqiu.openagent.mapper.ChunkBgeM3Mapper;
 import com.qingqiu.openagent.mapper.DocumentMapper;
 import com.qingqiu.openagent.mapper.KnowledgeBaseMapper;
 import com.qingqiu.openagent.model.dto.DocumentDTO;
-import com.qingqiu.openagent.model.entity.ChunkBgeM3;
 import com.qingqiu.openagent.model.entity.Document;
 import com.qingqiu.openagent.model.entity.KnowledgeBase;
 import com.qingqiu.openagent.model.request.CreateDocumentRequest;
@@ -19,13 +17,8 @@ import com.qingqiu.openagent.model.response.GetDocumentsResponse;
 import com.qingqiu.openagent.model.vo.DocumentVO;
 import com.qingqiu.openagent.service.DocumentFacadeService;
 import com.qingqiu.openagent.service.DocumentStorageService;
-import com.qingqiu.openagent.service.MarkdownParserService;
-import com.qingqiu.openagent.service.RagService;
 import com.qingqiu.openagent.util.UserContext;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -49,9 +42,7 @@ public class DocumentFacadeServiceImpl implements DocumentFacadeService {
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final DocumentConverter documentConverter;
     private final DocumentStorageService documentStorageService;
-    private final MarkdownParserService markdownParserService;
-    private final RagService ragService;
-    private final ChunkBgeM3Mapper chunkBgeM3Mapper;
+    private final DocumentVectorizationService documentVectorizationService;
 
     @Override
     public GetDocumentsResponse getDocuments() {
@@ -125,34 +116,45 @@ public class DocumentFacadeServiceImpl implements DocumentFacadeService {
             document.setUpdatedAt(now);
             document.setIsDeleted(0);
 
+            // 1. 先以 uploading 状态写入 DB
+            document.setStatus("uploading");
             int rows = documentMapper.insert(document);
             if (rows <= 0) {
                 throw new BizException(BizExceptionEnum.OPERATION_ERROR.getCode(), "创建文档记录失败");
             }
 
             String documentId = document.getId();
+
+            // 2. 保存文件到 OSS / 本地
             String filePath = documentStorageService.saveFile(kbId, documentId, file);
 
+            // 3. 写入 metadata.filePath，把状态切到「向量化中」/「已完成（跳过）」
             DocumentDTO.MetaData metadata = new DocumentDTO.MetaData();
             metadata.setFilePath(filePath);
             documentDTO.setMetadata(metadata);
             documentDTO.setId(documentId);
             documentDTO.setCreatedAt(now);
-            documentDTO.setUpdatedAt(now);
+            documentDTO.setUpdatedAt(LocalDateTime.now());
+
+            // 知识库 enum 已剔除图片，所以默认全部走向量化；图片或不识别仍兜底跳过
+            boolean isImage = isImageType(filetype);
+            boolean needVectorize = !isImage;
+            documentDTO.setStatus(needVectorize ? "vectorizing" : "skipped");
 
             Document updatedDocument = documentConverter.toEntity(documentDTO);
             updatedDocument.setId(documentId);
             updatedDocument.setCreatedAt(now);
-            updatedDocument.setUpdatedAt(now);
-
+            updatedDocument.setUpdatedAt(LocalDateTime.now());
             documentMapper.updateById(updatedDocument);
-            log.info("文档上传成功: userId={}, kbId={}, documentId={}, filename={}",
-                    userId, kbId, documentId, originalFilename);
 
-            if ("md".equalsIgnoreCase(filetype) || "markdown".equalsIgnoreCase(filetype)) {
-                processMarkdownDocument(kbId, documentId, filePath);
+            log.info("文档上传成功: userId={}, kbId={}, documentId={}, filename={}, status={}",
+                    userId, kbId, documentId, originalFilename, updatedDocument.getStatus());
+
+            // 4. 异步向量化（md 走标题切段，其他走 Tika + 弹性分段），失败回写状态
+            if (needVectorize) {
+                documentVectorizationService.processAsync(kbId, documentId, filePath, filetype);
             } else {
-                log.warn("待新增处理的文件类型: {}", filetype);
+                log.warn("图片类型已跳过向量化: filetype={}", filetype);
             }
 
             return CreateDocumentResponse.builder().documentId(documentId).build();
@@ -203,42 +205,19 @@ public class DocumentFacadeServiceImpl implements DocumentFacadeService {
         }
     }
 
-    private void processMarkdownDocument(String kbId, String documentId, String filePath) {
-        try {
-            log.info("开始处理 Markdown 文档: kbId={}, documentId={}, filePath={}", kbId, documentId, filePath);
-            Path path = documentStorageService.getFilePath(filePath);
-            try (InputStream inputStream = Files.newInputStream(path)) {
-                List<MarkdownParserService.MarkdownSection> sections = markdownParserService.parseMarkdown(inputStream);
-                if (sections.isEmpty()) {
-                    log.warn("Markdown 文档解析后没有找到任何章节: documentId={}", documentId);
-                    return;
-                }
-                LocalDateTime now = LocalDateTime.now();
-                int chunkCount = 0;
-                for (MarkdownParserService.MarkdownSection section : sections) {
-                    String title = section.getTitle();
-                    String content = section.getContent();
-                    if (title == null || title.trim().isEmpty()) {
-                        continue;
-                    }
-                    float[] embedding = ragService.embed(title);
-                    ChunkBgeM3 chunk = ChunkBgeM3.builder()
-                            .kbId(kbId)
-                            .docId(documentId)
-                            .content(content != null ? content : "")
-                            .metadata(null)
-                            .embedding(embedding)
-                            .createdAt(now)
-                            .updatedAt(now)
-                            .build();
-                    if (chunkBgeM3Mapper.insert(chunk) > 0) {
-                        chunkCount++;
-                    }
-                }
-                log.info("Markdown 文档处理完成: documentId={}, 共生成 {} 个 chunks", documentId, chunkCount);
-            }
-        } catch (Exception e) {
-            log.error("处理 Markdown 文档失败: documentId={}", documentId, e);
+    private static boolean isImageType(String filetype) {
+        if (filetype == null) return false;
+        switch (filetype.toLowerCase()) {
+            case "png":
+            case "jpg":
+            case "jpeg":
+            case "gif":
+            case "webp":
+            case "bmp":
+            case "svg":
+                return true;
+            default:
+                return false;
         }
     }
 

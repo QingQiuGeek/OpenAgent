@@ -10,6 +10,7 @@ import {
   getOptionalTools,
   type ToolVO,
 } from "../../api/api.ts";
+import { listMyMcpToolGroups, type McpToolGroupVO } from "../../api/mcpServer.ts";
 import { useKnowledgeBases } from "../../hooks/useKnowledgeBases.ts";
 import { useModels } from "../../hooks/useModels.ts";
 import CustomModelModal from "./CustomModelModal.tsx";
@@ -30,9 +31,8 @@ const menuItems = [
   { key: "base", label: "基础设置" },
   { key: "model", label: "模型设置" },
   { key: "knowledge", label: "知识库设置" },
-  // { key: "mcp", label: "MCP 服务器" },
   { key: "tools", label: "工具调用" },
-  // { key: "memory", label: "全局记忆" },
+  { key: "mcp", label: "MCP 工具" },
 ];
 
 const AddAgentModal: React.FC<AddAgentModalProps> = ({
@@ -45,15 +45,11 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
   // 菜单项
   const [selectedKey, setSelectedKey] = useState<string>("base");
 
-  // 获取知识库列表
-  const { knowledgeBases, refreshKnowledgeBases } = useKnowledgeBases();
+  // 知识库：只在打开弹窗 + 切到「知识库」tab 时拉取
+  const kbEnabled = open && selectedKey === "knowledge";
+  const { knowledgeBases } = useKnowledgeBases(kbEnabled);
 
-  // 打开弹窗时刷新一次，确保新建/更名后的知识库可见
-  useEffect(() => {
-    if (open) {
-      refreshKnowledgeBases().catch(() => {});
-    }
-  }, [open, refreshKnowledgeBases]);
+  // 首次切到该 tab 由 hook 自动 fetch
 
   // 模型列表
   const { models, loading: modelsLoading, createModelHandle, updateModelHandle, deleteModelHandle } = useModels();
@@ -62,12 +58,14 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
 
   // 工具列表
   const [tools, setTools] = useState<ToolVO[]>([]);
+  // 当前用户的 MCP 工具分组
+  const [mcpGroups, setMcpGroups] = useState<McpToolGroupVO[]>([]);
 
   // 表单数据
   const [formData, setFormData] = useState<CreateAgentRequest>({
     name: "智能体助手",
     description: "",
-    systemPrompt: "你是一个很有用的智能体助手",
+    systemPrompt: "你是一个OpenAgent智能体助手，擅长调用工具（如有）、mcp（如有）、查询知识库为用户解答问题",
     modelId: 0,
     allowedTools: [],
     allowedKbs: [],
@@ -114,19 +112,36 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
     }
   }, [editingAgent, open]);
 
-  // 获取工具列表
+  // 工具列表：只在第一次切到「工具」tab 时拉取
+  const [toolsLoaded, setToolsLoaded] = useState(false);
   useEffect(() => {
+    if (!open || selectedKey !== "tools" || toolsLoaded) return;
     async function fetchTools() {
       try {
         const resp = await getOptionalTools();
         setTools(resp.tools);
+        setToolsLoaded(true);
       } catch (error) {
         console.error("获取工具列表失败:", error);
       }
     }
 
     fetchTools().then();
-  }, []);
+  }, [open, selectedKey, toolsLoaded]);
+
+  // MCP 工具分组：只在第一次切到「MCP」tab 时拉取
+  const [mcpLoaded, setMcpLoaded] = useState(false);
+  useEffect(() => {
+    if (!open || selectedKey !== "mcp" || mcpLoaded) return;
+    listMyMcpToolGroups()
+      .then((g) => {
+        setMcpGroups(g);
+        setMcpLoaded(true);
+      })
+      .catch(() => {
+        // http 层已 toast
+      });
+  }, [open, selectedKey, mcpLoaded]);
 
   const isEditMode = !!editingAgent;
 
@@ -138,6 +153,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
       footer={null}
       width={800}
       centered
+      destroyOnHidden
     >
       <div className="flex h-[500px]">
         <div className="w-[150px] h-full border-r border-gray-200 pr-2">
@@ -586,6 +602,83 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+            {selectedKey === "mcp" && (
+              <div>
+                <div className="mb-4">
+                  <label className="block text-gray-700 font-medium mb-1">
+                    我的 MCP 工具
+                  </label>
+                  <p className="text-sm text-gray-500">
+                    勾选后将整个 MCP 服务的工具集注入到当前智能体。
+                  </p>
+                </div>
+                {mcpGroups.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500 text-sm">
+                    <p>暂无已启用的 MCP 服务</p>
+                    <p className="text-xs mt-1">请先到「MCP 服务器」页面配置一个</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {mcpGroups.map((g) => {
+                      const refKey = `mcp:${g.mcpServerId}`;
+                      const checked = !!formData.allowedTools?.includes(refKey);
+                      const toggle = () => {
+                        const cur = formData.allowedTools || [];
+                        setFormData({
+                          ...formData,
+                          allowedTools: checked
+                            ? cur.filter((t) => t !== refKey)
+                            : [...cur, refKey],
+                        });
+                      };
+                      return (
+                        <div
+                          key={refKey}
+                          className={`border rounded-lg p-4 cursor-pointer transition-all hover:border-blue-400 hover:bg-blue-50 ${
+                            checked
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-gray-200"
+                          }`}
+                          onClick={toggle}
+                        >
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={checked}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggle();
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="mt-0.5"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-gray-900">
+                                  {g.mcpServerName}
+                                </span>
+                                <Tag color="blue">{g.transport}</Tag>
+                                {g.ok ? (
+                                  <Tag color="green">{g.toolNames.length} 个工具</Tag>
+                                ) : (
+                                  <Tooltip title={g.errorMsg || "连接失败"}>
+                                    <Tag color="red">连接失败</Tag>
+                                  </Tooltip>
+                                )}
+                              </div>
+                              {g.ok && g.toolNames.length > 0 && (
+                                <p className="text-sm text-gray-500 mt-1 truncate">
+                                  {g.toolNames.join(", ")}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

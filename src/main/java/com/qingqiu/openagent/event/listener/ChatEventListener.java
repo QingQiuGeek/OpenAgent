@@ -27,9 +27,12 @@ public class ChatEventListener {
         ChatAgent chatAgent = chatAgentFactory.create(
                 event.getAgentId(),
                 event.getSessionId(),
-                event.isDeepThink(),
                 event.isWebSearch()
         );
+        // ThreadLocal 在 @Async 线程中失效，这里用事件携带的 userId 覆盖一次
+        if (event.getUserId() != null) {
+            chatAgent.setUsageUserId(event.getUserId());
+        }
         chatAgent.run();
     }
 }

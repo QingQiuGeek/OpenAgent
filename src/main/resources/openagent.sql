@@ -17,17 +17,83 @@ CREATE TABLE "user" (
 
 CREATE TABLE enum_config (
   id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  type_code  VARCHAR(50)  NOT NULL,             -- 枚举类别：model_provider_type / agent_status ...
-  item_code  VARCHAR(100) NOT NULL,             -- 枚举项 code：openai / anthropic ...
-  item_label VARCHAR(100) NOT NULL,             -- 展示名
-  extra      JSONB,                             -- 扩展（图标、默认 base_url 等）
-  sort       INT NOT NULL DEFAULT 0,
+  type       VARCHAR(50)  NOT NULL,             -- 枚举类别：model_provider_type / tool_type / document_filetype / mcp_transport
+  value      VARCHAR(100) NOT NULL,             -- 枚举值：openai / pdf / stdio ...
   status     INT NOT NULL DEFAULT 0,            -- 0 正常 / 1 禁用
   created_at TIMESTAMP NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
   is_deleted INT NOT NULL DEFAULT 0,
-  UNIQUE (type_code, item_code)
+  UNIQUE (type, value)
 );
+
+-- 字典表种子（与代码中的常量保持一致；ON CONFLICT 保证幂等）
+INSERT INTO enum_config(type, value) VALUES
+    ('model_provider_type','openai'),
+    ('model_provider_type','deepseek'),
+    ('model_provider_type','qianwen'),
+    ('model_provider_type','zhipu'),
+    ('model_provider_type','ollama'),
+    ('tool_type','FIXED'),
+    ('tool_type','OPTIONAL'),
+    ('document_filetype','pdf'),
+    ('document_filetype','docx'),
+    ('document_filetype','doc'),
+    ('document_filetype','xlsx'),
+    ('document_filetype','xls'),
+    ('document_filetype','md'),
+    ('document_filetype','txt'),
+    ('document_filetype','json'),
+    ('document_filetype','yaml'),
+    ('document_filetype','yml'),
+    ('document_filetype','sql'),
+    ('document_filetype','java'),
+    ('document_filetype','js'),
+    ('document_filetype','jsx'),
+    ('document_filetype','ts'),
+    ('document_filetype','tsx'),
+    ('document_filetype','py'),
+    ('document_filetype','go'),
+    ('document_filetype','rs'),
+    ('document_filetype','cpp'),
+    ('document_filetype','c'),
+    ('document_filetype','h'),
+    ('document_filetype','cs'),
+    ('document_filetype','rb'),
+    ('document_filetype','php'),
+    ('upload_filetype','pdf'),
+    ('upload_filetype','docx'),
+    ('upload_filetype','doc'),
+    ('upload_filetype','xlsx'),
+    ('upload_filetype','xls'),
+    ('upload_filetype','md'),
+    ('upload_filetype','txt'),
+    ('upload_filetype','json'),
+    ('upload_filetype','yaml'),
+    ('upload_filetype','yml'),
+    ('upload_filetype','sql'),
+    ('upload_filetype','java'),
+    ('upload_filetype','js'),
+    ('upload_filetype','jsx'),
+    ('upload_filetype','ts'),
+    ('upload_filetype','tsx'),
+    ('upload_filetype','py'),
+    ('upload_filetype','go'),
+    ('upload_filetype','rs'),
+    ('upload_filetype','cpp'),
+    ('upload_filetype','c'),
+    ('upload_filetype','h'),
+    ('upload_filetype','cs'),
+    ('upload_filetype','rb'),
+    ('upload_filetype','php'),
+    ('upload_filetype','png'),
+    ('upload_filetype','jpg'),
+    ('upload_filetype','jpeg'),
+    ('upload_filetype','gif'),
+    ('upload_filetype','webp'),
+    ('mcp_transport','stdio'),
+    ('mcp_transport','sse'),
+    ('mcp_transport','http')
+ON CONFLICT (type, value) DO NOTHING;
 
 CREATE TABLE model (
      id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -81,6 +147,38 @@ CREATE TABLE chat_message (
     is_deleted INT NOT NULL DEFAULT 0
 );
 
+-- -----------------------------------------------------------------------------
+-- chat_feedback：消息点赞/点踩
+-- -----------------------------------------------------------------------------
+CREATE TABLE chat_feedback (
+    id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id     BIGINT NOT NULL,
+    message_id  UUID   NOT NULL REFERENCES chat_message(id) ON DELETE CASCADE,
+    rating      SMALLINT NOT NULL,                    -- 1 赞 / -1 踩
+    reason_tags JSONB,                                -- ["不准确","格式差"]
+    comment     TEXT,
+    created_at  TIMESTAMP DEFAULT NOW(),
+    UNIQUE (user_id, message_id)
+);
+CREATE INDEX idx_feedback_message ON chat_feedback (message_id);
+
+-- -----------------------------------------------------------------------------
+-- share_link：会话分享公开页
+-- -----------------------------------------------------------------------------
+CREATE TABLE share_link (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     BIGINT NOT NULL,
+    session_id  UUID NOT NULL REFERENCES chat_session(id) ON DELETE CASCADE,
+    slug        VARCHAR(20) NOT NULL,                    -- 公开访问短码
+    snapshot    JSONB,                                    -- 创建瞬间的会话快照
+    expire_at   TIMESTAMP,                                -- NULL 表示永不过期
+    view_count  INT NOT NULL DEFAULT 0,
+    created_at  TIMESTAMP DEFAULT NOW(),
+    is_deleted  INT NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX idx_share_slug_alive ON share_link (slug) WHERE is_deleted = 0;
+CREATE INDEX idx_share_user_created ON share_link (user_id, created_at DESC);
+
 CREATE TABLE knowledge_base (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     BIGINT NOT NULL,                                  -- 所属用户
@@ -101,6 +199,8 @@ CREATE TABLE document (
     filetype   TEXT,                                             -- pdf / md / txt 等
     size       BIGINT,                                           -- 文件大小
     metadata   JSONB,                                            -- 页数、上传方式、解析参数等
+    status     TEXT NOT NULL DEFAULT 'uploading',                 -- uploading / vectorizing / done / failed / skipped
+    error_msg  TEXT,                                              -- 失败时记录原因
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     is_deleted INT NOT NULL DEFAULT 0
@@ -155,6 +255,7 @@ CREATE TABLE agent_usage_log (
     agent_id          UUID,
     session_id        UUID,
     model_id          BIGINT,
+    chat_mode         VARCHAR(20),                 -- normal / agent / web_search ...
     prompt_tokens     INT,
     completion_tokens INT,
     total_tokens      INT,
@@ -163,4 +264,6 @@ CREATE TABLE agent_usage_log (
     error_msg         TEXT,
     created_at        TIMESTAMP  NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_agent_usage_user_time ON agent_usage_log (user_id, created_at DESC);
+CREATE INDEX idx_agent_usage_user_time   ON agent_usage_log (user_id, created_at DESC);
+CREATE INDEX idx_agent_usage_model_time  ON agent_usage_log (model_id, created_at DESC);
+CREATE INDEX idx_agent_usage_status_time ON agent_usage_log (status,   created_at DESC);

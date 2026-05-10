@@ -2,6 +2,7 @@ import React from "react";
 import { Button, Dropdown, Empty, Tag, Tooltip, Typography } from "antd";
 import {
   ApiOutlined,
+  AppstoreOutlined,
   BookOutlined,
   DownOutlined,
   MoonOutlined,
@@ -24,6 +25,8 @@ interface ChatHeaderProps {
   description?: string;
   /** 当前 agent 绑定的工具（已解析为名称），未提供时不渲染按钮 */
   tools?: HeaderListItem[];
+  /** 当前 agent 绑定的 MCP 服务器（name=服务名，description=工具清单） */
+  mcpServers?: HeaderListItem[];
   /** 当前 agent 绑定的知识库，同上 */
   knowledgeBases?: HeaderListItem[];
 }
@@ -96,6 +99,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
   subtitle,
   description,
   tools,
+  mcpServers,
   knowledgeBases,
 }) => {
   const { mode, toggle } = useTheme();
@@ -119,8 +123,15 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({
         {tools && (
           <ConfigDropdown
             icon={<ApiOutlined />}
-            label="工具列表"
+            label="Tool列表"
             items={tools}
+          />
+        )}
+        {mcpServers && (
+          <ConfigDropdown
+            icon={<AppstoreOutlined />}
+            label="MCP 列表"
+            items={mcpServers}
           />
         )}
         {knowledgeBases && (

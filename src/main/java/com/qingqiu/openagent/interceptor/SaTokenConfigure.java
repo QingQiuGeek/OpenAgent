@@ -53,7 +53,8 @@ public class SaTokenConfigure implements WebMvcConfigurer {
             "/v3/api-docs/**",
             "/webjars/**",
             "/favicon.ico",
-            "/error"
+            "/error",
+            "/api/share/public/**"
         );
 
 

@@ -1,40 +1,30 @@
 package com.qingqiu.openagent.util;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.qingqiu.openagent.mapper.EnumConfigMapper;
-import com.qingqiu.openagent.model.entity.EnumConfig;
+import com.qingqiu.openagent.service.EnumConfigFacadeService;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
  * @author: qingqiugeek
- * @date: 2026/5/1 15:15
- * @description: EnumConfigHelper
+ * @date: 2026/5/9 09:35
+ * @description: EnumConfig helper —— 旧入口，保留兼容；新代码请直接注入 {@link EnumConfigFacadeService}
+ * @deprecated 使用 {@link EnumConfigFacadeService}
  */
+@Deprecated
 @Component
 @AllArgsConstructor
 public class EnumConfigHelper {
 
-    private final EnumConfigMapper enumConfigMapper;
+    private final EnumConfigFacadeService enumConfigFacadeService;
 
-    private final ConcurrentHashMap<String, List<EnumConfig>> cache = new ConcurrentHashMap<>();
-
-    /** 获取指定类别下未禁用的枚举项，按 sort 升序。 */
-    public List<EnumConfig> getByType(String typeCode) {
-        return cache.computeIfAbsent(typeCode, this::loadByType);
+    /** 获取指定类别下未禁用的枚举值列表。 */
+    public List<String> getByType(String type) {
+        return enumConfigFacadeService.listValues(type);
     }
 
+    /** 强制刷新缓存。 */
     public void refresh() {
-        cache.clear();
-    }
-
-    private List<EnumConfig> loadByType(String typeCode) {
-        LambdaQueryWrapper<EnumConfig> qw = new LambdaQueryWrapper<>();
-        qw.eq(EnumConfig::getTypeCode, typeCode)
-                .eq(EnumConfig::getStatus, 0)
-                .orderByAsc(EnumConfig::getSort);
-        return enumConfigMapper.selectList(qw);
+        enumConfigFacadeService.refresh();
     }
 }

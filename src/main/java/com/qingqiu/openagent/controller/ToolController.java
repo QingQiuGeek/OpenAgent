@@ -2,6 +2,7 @@ package com.qingqiu.openagent.controller;
 
 import com.qingqiu.openagent.agent.tools.ITool;
 import com.qingqiu.openagent.model.common.R;
+import com.qingqiu.openagent.model.vo.McpToolGroupVO;
 import com.qingqiu.openagent.service.ToolFacadeService;
 import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,5 +29,11 @@ public class ToolController {
     @GetMapping
     public R<List<ITool>> getAllTools() {
         return R.success(toolFacadeService.getAllTools());
+    }
+
+    /** 当前用户已启用的 MCP 服务暴露的工具，按 server 分组 */
+    @GetMapping("/mcp")
+    public R<List<McpToolGroupVO>> getMyMcpToolGroups() {
+        return R.success(toolFacadeService.listMyMcpToolGroups());
     }
 }

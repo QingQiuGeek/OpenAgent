@@ -52,4 +52,10 @@ public class McpServerController {
         mcpServerFacadeService.deleteMcpServer(mcpServerId);
         return R.success(true);
     }
+
+    /** 连接测试：返回 MCP server 暴露的工具名列表；失败抛 BizException 由全局异常处理 */
+    @PostMapping("/{mcpServerId}/test")
+    public R<java.util.List<String>> testConnection(@PathVariable Long mcpServerId) {
+        return R.success(mcpServerFacadeService.testConnection(mcpServerId));
+    }
 }

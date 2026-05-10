@@ -1,10 +1,13 @@
 package com.qingqiu.openagent.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.qingqiu.openagent.agent.mcp.McpClientPool;
 import com.qingqiu.openagent.converter.McpServerConverter;
 import com.qingqiu.openagent.enums.BizExceptionEnum;
 import com.qingqiu.openagent.exception.BizException;
 import com.qingqiu.openagent.mapper.McpServerMapper;
+import dev.langchain4j.mcp.client.McpClient;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import com.qingqiu.openagent.model.entity.McpServer;
 import com.qingqiu.openagent.model.request.CreateMcpServerRequest;
 import com.qingqiu.openagent.model.request.UpdateMcpServerRequest;
@@ -31,6 +34,7 @@ public class McpServerFacadeServiceImpl implements McpServerFacadeService {
 
     private final McpServerMapper mcpServerMapper;
     private final McpServerConverter mcpServerConverter;
+    private final McpClientPool mcpClientPool;
 
     @Override
     public GetMcpServersResponse getMcpServers() {
@@ -67,6 +71,8 @@ public class McpServerFacadeServiceImpl implements McpServerFacadeService {
         if (rows <= 0) {
             throw new BizException(BizExceptionEnum.OPERATION_ERROR.getCode(), "更新 MCP Server 失败");
         }
+        // 配置变更 → 丢弃缓存的连接
+        mcpClientPool.invalidate(existing.getId());
     }
 
     @Override
@@ -75,6 +81,26 @@ public class McpServerFacadeServiceImpl implements McpServerFacadeService {
         int rows = mcpServerMapper.deleteById(existing.getId());
         if (rows <= 0) {
             throw new BizException(BizExceptionEnum.OPERATION_ERROR.getCode(), "删除 MCP Server 失败");
+        }
+        mcpClientPool.invalidate(existing.getId());
+    }
+
+    /** 连接测试：调用 listTools()。返回工具名字列表；失败拋 BizException。 */
+    @Override
+    public List<String> testConnection(Long mcpServerId) {
+        McpServer existing = requireOwned(mcpServerId);
+        // 测试前丢弃之前可能的旧连接，避免用错环境调试不过去
+        mcpClientPool.invalidate(existing.getId());
+        try {
+            McpClient client = mcpClientPool.acquire(existing);
+            List<ToolSpecification> tools = client.listTools();
+            return tools == null
+                    ? List.of()
+                    : tools.stream().map(ToolSpecification::name).collect(Collectors.toList());
+        } catch (Exception e) {
+            mcpClientPool.invalidate(existing.getId());
+            throw new BizException(BizExceptionEnum.OPERATION_ERROR.getCode(),
+                    "连接失败: " + e.getMessage());
         }
     }
 

@@ -40,6 +40,12 @@ public class Document {
     /** JSON String */
     private String metadata;
 
+    /** 文档处理状态：uploading / vectorizing / done / failed / skipped */
+    private String status;
+
+    /** 处理失败时的错误信息 */
+    private String errorMsg;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

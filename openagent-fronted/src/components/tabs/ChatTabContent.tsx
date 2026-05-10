@@ -1,11 +1,13 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate, useLocation, matchPath } from "react-router-dom";
-import { Button, Popconfirm, Tag } from "antd";
+import { Button, Popconfirm, Tag, Tooltip } from "antd";
 import {
   PlusOutlined,
   MessageOutlined,
   DeleteOutlined,
+  ShareAltOutlined,
 } from "@ant-design/icons";
+import ShareLinkModal from "../modals/ShareLinkModal.tsx";
 import { useChatSessions } from "../../hooks/useChatSessions.ts";
 import { useAgents } from "../../hooks/useAgents.ts";
 import { useAuth } from "../../contexts/AuthContext.tsx";
@@ -52,6 +54,9 @@ const ChatTabContent: React.FC = () => {
   const handleDeleteChatSession = async (chatSessionId: string) => {
     await deleteChatSession(chatSessionId);
   };
+
+  // 分享弹框当前选中的 sessionId
+  const [shareSessionId, setShareSessionId] = useState<string | null>(null);
 
   // 格式化标题显示
   const getDisplayTitle = (session: { title?: string; agentId: string }) => {
@@ -149,9 +154,21 @@ const ChatTabContent: React.FC = () => {
                     )}
                   </div>
                   <div
-                    className="shrink-0 self-center"
+                    className="shrink-0 self-center flex items-center gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <Tooltip title="分享会话">
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<ShareAltOutlined />}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShareSessionId(session.id);
+                        }}
+                      />
+                    </Tooltip>
                     <Popconfirm
                       title="确定要删除这条聊天记录吗？"
                       description="删除后将无法恢复"
@@ -176,6 +193,11 @@ const ChatTabContent: React.FC = () => {
           </div>
         )}
       </div>
+      <ShareLinkModal
+        open={!!shareSessionId}
+        sessionId={shareSessionId}
+        onClose={() => setShareSessionId(null)}
+      />
     </div>
   );
 };

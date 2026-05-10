@@ -3,9 +3,9 @@ import { Button, Form, Input, InputNumber, Modal, Popconfirm, Select } from "ant
 import {
   type ModelVO,
   type UpdateModelRequest,
-  type ProviderTypeVO,
-  getProviderTypes,
+  EnumType,
 } from "../../api/api.ts";
+import { useEnumOptions } from "../../hooks/useEnumOptions";
 
 interface EditModelModalProps {
   open: boolean;
@@ -29,16 +29,11 @@ const EditModelModal: React.FC<EditModelModalProps> = ({
   const [form] = Form.useForm<UpdateModelRequest & { apiKey?: string }>();
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [providers, setProviders] = useState<ProviderTypeVO[]>([]);
-  const [providersLoading, setProvidersLoading] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setProvidersLoading(true);
-    getProviderTypes()
-      .then((list) => setProviders(list))
-      .finally(() => setProvidersLoading(false));
-  }, [open]);
+  const {
+    options: providers,
+    loading: providersLoading,
+    reload: reloadProviders,
+  } = useEnumOptions(EnumType.ModelProviderType, open);
 
   useEffect(() => {
     if (open && model) {
@@ -127,10 +122,10 @@ const EditModelModal: React.FC<EditModelModalProps> = ({
           <Select
             placeholder="选择厂商"
             loading={providersLoading}
-            options={providers.map((p) => ({
-              value: p.code,
-              label: `${p.description}（${p.code}）`,
-            }))}
+            options={providers.map((code) => ({ value: code, label: code }))}
+            onDropdownVisibleChange={(visible) => {
+              if (visible) reloadProviders(true);
+            }}
           />
         </Form.Item>
         <Form.Item

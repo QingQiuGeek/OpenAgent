@@ -6,6 +6,9 @@ import com.qingqiu.openagent.agent.tools.ITool;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agent.tool.ToolSpecifications;
+import dev.langchain4j.mcp.client.McpClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.aop.support.AopUtils;
 
 import java.lang.reflect.Method;
@@ -23,6 +26,8 @@ import java.util.Map;
  */
 public class LangChainToolExecutor {
 
+    private static final Logger log = LoggerFactory.getLogger(LangChainToolExecutor.class);
+
     private final ObjectMapper objectMapper;
     private final List<ToolSpecification> toolSpecifications;
     private final Map<String, ToolMethodInvoker> invokerByToolName;
@@ -32,6 +37,35 @@ public class LangChainToolExecutor {
         this.toolSpecifications = new ArrayList<>();
         this.invokerByToolName = new HashMap<>();
         init(iTools);
+    }
+
+    /**
+     * 把一组 MCP 客户端的工具加入运行时工具集。
+     * <p>同名工具：MCP 优先（覆盖内置）；多个 MCP 同名：后注册者覆盖。
+     * 抛错的 MCP 会被跳过、不阻塞整体。
+     */
+    public void addMcpTools(List<McpClient> mcpClients) {
+        if (mcpClients == null || mcpClients.isEmpty()) return;
+        for (McpClient client : mcpClients) {
+            try {
+                List<ToolSpecification> specs = client.listTools();
+                if (specs == null || specs.isEmpty()) continue;
+                for (ToolSpecification spec : specs) {
+                    toolSpecifications.add(spec);
+                    final String toolName = spec.name();
+                    invokerByToolName.put(toolName, argumentsJson -> {
+                        ToolExecutionRequest req = ToolExecutionRequest.builder()
+                                .name(toolName)
+                                .arguments(argumentsJson == null ? "{}" : argumentsJson)
+                                .build();
+                        return client.executeTool(req);
+                    });
+                }
+                log.info("[LangChainToolExecutor] 注入 MCP 工具 client={} count={}", client.key(), specs.size());
+            } catch (Exception e) {
+                log.warn("[LangChainToolExecutor] 加载 MCP 工具失败，跳过: {}", e.getMessage());
+            }
+        }
     }
 
     public List<ToolSpecification> getToolSpecifications() {

@@ -55,22 +55,22 @@ const QUICK_CARDS = [
   {
     emoji: "🤖",
     title: "智能对话",
-    desc: "与 AI 助手进行智能对话",
+    desc: "创建智能体助手，进行智能对话",
   },
   {
     emoji: "💡",
-    title: "知识问答",
-    desc: "基于知识库进行准确问答",
+    title: "知识库问答",
+    desc: "基于知识库进行RAG，准确问答",
   },
   {
     emoji: "💬",
-    title: "快速开始",
-    desc: "输入消息，立即开始对话",
+    title: "自定义接入模型",
+    desc: "设置APIKey和URL，选择厂商，一键调用",
   },
   {
     emoji: "⚡",
-    title: "工具调用",
-    desc: "绑定 MCP / 内置工具增强能力",
+    title: "MCP/Tool调用",
+    desc: "绑定MCP/Tool增强能力，支持联网搜索",
   },
 ];
 
@@ -82,6 +82,8 @@ interface DefaultAgentChatViewProps {
   handleSendMessage: (payload: ChatInputSubmitPayload) => void;
   loading: boolean;
   agents: AgentVO[];
+  webSearch?: boolean;
+  onWebSearchChange?: (v: boolean) => void;
 }
 
 /**
@@ -91,6 +93,8 @@ interface DefaultAgentChatViewProps {
 const EmptyAgentChatView: React.FC<DefaultAgentChatViewProps> = ({
   loading,
   handleSendMessage,
+  webSearch,
+  onWebSearchChange,
 }) => {
   const typed = useLoopTypewriter(WELCOME_TEXT);
 
@@ -169,6 +173,8 @@ const EmptyAgentChatView: React.FC<DefaultAgentChatViewProps> = ({
           <AgentChatInput
             isAgentRunning={loading}
             onSend={handleSendMessage}
+            webSearch={webSearch}
+            onWebSearchChange={onWebSearchChange}
           />
         </div>
       </div>

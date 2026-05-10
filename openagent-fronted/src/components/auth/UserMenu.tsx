@@ -1,6 +1,15 @@
 import React from "react";
 import { Avatar, Button, Dropdown, type MenuProps } from "antd";
-import { UserOutlined, LogoutOutlined } from "@ant-design/icons";
+import {
+  UserOutlined,
+  LogoutOutlined,
+  DashboardOutlined,
+  ShareAltOutlined,
+  ApiOutlined,
+  HomeOutlined,
+  BookOutlined,
+} from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext.tsx";
 
 /**
@@ -8,6 +17,7 @@ import { useAuth } from "../../contexts/AuthContext.tsx";
  */
 const UserMenu: React.FC = () => {
   const { user, openAuthModal, logout } = useAuth();
+  const navigate = useNavigate();
 
   if (!user) {
     return (
@@ -34,11 +44,43 @@ const UserMenu: React.FC = () => {
     },
     { type: "divider" },
     {
+      key: "home",
+      icon: <HomeOutlined />,
+      label: "首页",
+      onClick: () => navigate("/"),
+    },
+    {
+      key: "knowledge-base",
+      icon: <BookOutlined />,
+      label: "知识库",
+      onClick: () => navigate("/knowledge-base"),
+    },
+    {
+      key: "my-shares",
+      icon: <ShareAltOutlined />,
+      label: "我的分享",
+      onClick: () => navigate("/shares"),
+    },
+    {
+      key: "mcp-servers",
+      icon: <ApiOutlined />,
+      label: "MCP 服务器",
+      onClick: () => navigate("/mcp-servers"),
+    },
+    {
+      key: "my-models",
+      icon: <DashboardOutlined />,
+      label: "我的模型",
+      onClick: () => navigate("/usage"),
+    },
+    { type: "divider" },
+    {
       key: "logout",
       icon: <LogoutOutlined />,
       label: "退出登录",
-      onClick: () => {
-        logout();
+      onClick: async () => {
+        await logout();
+        navigate("/", { replace: true });
       },
     },
   ];

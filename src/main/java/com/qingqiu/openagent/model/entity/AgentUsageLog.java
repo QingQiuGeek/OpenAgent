@@ -32,6 +32,9 @@ public class AgentUsageLog {
 
     private Long modelId;
 
+    /** normal / agent / web_search ...（前端发起对话的模式） */
+    private String chatMode;
+
     private Integer promptTokens;
 
     private Integer completionTokens;

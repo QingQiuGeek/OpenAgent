@@ -46,15 +46,33 @@ export async function getLoginUser(): Promise<LoginUserVO> {
   return get<LoginUserVO>("/user");
 }
 
-// =============== Provider Type ===============
+// =============== Enum Config（DB 唯一权威字典） ===============
 
+/** 字典类别常量，与后端 EnumConfigType 对应。 */
+export const EnumType = {
+  ModelProviderType: "model_provider_type",
+  ToolType: "tool_type",
+  /** 知识库可向量化的文档类型，不含图片 */
+  DocumentFileType: "document_filetype",
+  /** 聊天框附件可上传类型，含图片 */
+  UploadFileType: "upload_filetype",
+  McpTransport: "mcp_transport",
+} as const;
+export type EnumTypeValue = (typeof EnumType)[keyof typeof EnumType];
+
+/** 拉取某类别下未禁用的枚举值列表。 */
+export async function getEnumValues(type: string): Promise<string[]> {
+  return get<string[]>(`/api/enums/${encodeURIComponent(type)}`);
+}
+
+/** @deprecated 保留兼容旧组件，内部转发到 getEnumValues。 */
 export interface ProviderTypeVO {
   code: string;
   description: string;
 }
-
 export async function getProviderTypes(): Promise<ProviderTypeVO[]> {
-  return get<ProviderTypeVO[]>("/api/provider-types");
+  const list = await getEnumValues(EnumType.ModelProviderType);
+  return list.map((code) => ({ code, description: code }));
 }
 
 // =============== Model ===============
@@ -288,8 +306,6 @@ export interface CreateChatMessageRequest {
   role: MessageType;
   content: string;
   metadata?: MetaData;
-  /** 是否启用深度思考模式 */
-  deepThink?: boolean;
   /** 是否启用联网搜索 */
   webSearch?: boolean;
 }
@@ -450,6 +466,9 @@ export interface DocumentVO {
   filename: string;
   filetype: string;
   size: number;
+  /** uploading / vectorizing / done / failed / skipped */
+  status?: string;
+  errorMsg?: string;
 }
 
 export interface GetDocumentsResponse {

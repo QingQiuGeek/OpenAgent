@@ -25,19 +25,11 @@ public class EnumConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 枚举类别：model_provider_type / agent_status / ... */
-    private String typeCode;
+    /** 枚举类别：model_provider_type / tool_type / document_filetype / mcp_transport ... */
+    private String type;
 
-    /** 枚举项 code：openai / anthropic / ... */
-    private String itemCode;
-
-    /** 展示名。 */
-    private String itemLabel;
-
-    /** JSON string：扩展（图标、默认 base_url 等）。 */
-    private String extra;
-
-    private Integer sort;
+    /** 枚举值：openai / pdf / stdio ... */
+    private String value;
 
     /** 0 正常 / 1 禁用。 */
     private Integer status;

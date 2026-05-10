@@ -21,4 +21,7 @@ public interface McpServerFacadeService {
     void updateMcpServer(Long mcpServerId, UpdateMcpServerRequest request);
 
     void deleteMcpServer(Long mcpServerId);
+
+    /** 连接测试：返回工具名列表；失败抛 BizException。 */
+    java.util.List<String> testConnection(Long mcpServerId);
 }
