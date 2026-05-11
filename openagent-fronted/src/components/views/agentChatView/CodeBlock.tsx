@@ -14,15 +14,6 @@ mermaid.initialize({
 });
 
 /**
- * 提取代码块原始文本。XMarkdown 传入的 domNode.children 里可能嵌套多层，
- * 直接从 DOM 节点读取文本。
- */
-const getCodeText = (el: HTMLElement | null): string => {
-  if (!el) return "";
-  return el.textContent || "";
-};
-
-/**
  * 从 className 中解析出语言（<code class="language-xxx">）
  */
 const getLanguage = (className?: string): string => {

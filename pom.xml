@@ -189,6 +189,17 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
+
+        <!--
+          spring-dotenv：自动把项目根目录的 .env 文件加载为 PropertySource，
+          让 application.yaml 的 ${ENV:默认值} 占位符能从 .env 取值。
+          本地启动 / IDEA / 容器化 全部生效；.env 不存在也不报错。
+        -->
+        <dependency>
+            <groupId>me.paulschwarz</groupId>
+            <artifactId>spring-dotenv</artifactId>
+            <version>4.0.0</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

@@ -195,7 +195,7 @@ public class ChatAgent {
     // 打印工具调用信息
     private void logToolCalls(List<ToolExecutionRequest> toolCalls) {
         if (toolCalls == null || toolCalls.isEmpty()) {
-            log.info("\n\n[ToolCalling] 无工具调用");
+            log.debug("[ToolCalling] 无工具调用");
             return;
         }
         String logMessage = IntStream.range(0, toolCalls.size())
@@ -209,7 +209,9 @@ public class ChatAgent {
                     );
                 })
                 .collect(Collectors.joining("\n\n"));
-        log.info("\n\n========== Tool Calling ==========\n{}\n=================================\n", logMessage);
+        if (log.isDebugEnabled()) {
+            log.debug("========== Tool Calling ==========\n{}\n=================================", logMessage);
+        }
     }
 
     // 持久化 Message, 返回 chatMessageId
@@ -287,8 +289,50 @@ public class ChatAgent {
         pendingChatMessages.clear();
     }
 
-    // 使用流式模型获取响应，并将文本增量通过 SSE 推送给前端
+    /** 流式聊天最多重试次数（不含首次）。 */
+    private static final int STREAM_MAX_RETRIES = 2;
+    /** 第 n 次重试前的退避基数（毫秒），实际等待 = base * (1 << n)。 */
+    private static final long STREAM_RETRY_BASE_MS = 400L;
+
+    // 使用流式模型获取响应，并将文本增量通过 SSE 推送给前端；遇到网络抖动自动重试。
     private ChatResponse streamChat(ChatRequest request) {
+        int attempt = 0;
+        while (true) {
+            try {
+                return streamChatOnce(request);
+            } catch (RuntimeException e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                if (attempt >= STREAM_MAX_RETRIES || !isRetryable(cause)) {
+                    throw e;
+                }
+                long backoff = STREAM_RETRY_BASE_MS * (1L << attempt);
+                attempt++;
+                log.warn("[ChatAgent] streamChat 第 {} 次重试 (backoff={}ms), 原因: {}",
+                        attempt, backoff, cause.getMessage());
+                try {
+                    Thread.sleep(backoff);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
+    }
+
+    /** 判断异常是否值得重试：仅网络层瞬时错误（连接重置 / SocketTimeout / IOException）。 */
+    private boolean isRetryable(Throwable cause) {
+        if (cause instanceof java.net.SocketTimeoutException) return true;
+        if (cause instanceof java.net.SocketException) return true;
+        if (cause instanceof java.io.IOException) {
+            String msg = cause.getMessage();
+            return msg != null && (msg.contains("Connection reset")
+                    || msg.contains("Connection closed")
+                    || msg.contains("timeout"));
+        }
+        return false;
+    }
+
+    private ChatResponse streamChatOnce(ChatRequest request) {
         if (streamingChatModel == null) {
             ChatResponse resp = chatModel.chat(request);
             accumulateTokens(resp);
@@ -349,6 +393,8 @@ public class ChatAgent {
                 - 如果有缺失的上下文时，优先从知识库中进行搜索%s
 
                 【输出规则（务必遵守）】
+                - 当用户问候 / 闲聊 / 自我介绍类问题（如"你好"、"你是谁"、"能做什么"），
+                  **第一轮直接调用 `directAnswer` 给最终答案**，不要先调任何检索/搜索工具，避免无谓兜圈子。
                 - 当上一步刚刚有「返回了具体内容」的工具（例如 webSearch、知识库检索、qwenGenerateImage 等）时，
                   必须用 `directAnswer` 工具，把工具返回的关键信息（图片链接、引用、答案）原样写进 `message` 参数交给用户；
                   不要直接 `terminate`，否则用户看不到任何输出。
@@ -397,16 +443,34 @@ public class ChatAgent {
             return;
         }
 
-        List<ToolExecutionResultMessage> toolResults = new ArrayList<>();
-        for (ToolExecutionRequest request : this.lastAiMessage.toolExecutionRequests()) {
+        List<ToolExecutionRequest> requests = this.lastAiMessage.toolExecutionRequests();
+
+        // 多工具并行执行：当一轮 think 同时召唤了 N 个工具（例如同时查 KB1+KB2、或一边 webSearch 一边查 KB），
+        // 用并行减少串行等待。directAnswer / terminate 这种瞬时本地工具混在里面也无副作用。
+        List<CompletableFuture<String>> futures = new ArrayList<>(requests.size());
+        for (ToolExecutionRequest request : requests) {
+            futures.add(CompletableFuture.supplyAsync(() -> {
+                try {
+                    return toolExecutor.execute(request);
+                } catch (Exception e) {
+                    Throwable cause = e.getCause() != null ? e.getCause() : e;
+                    log.warn("工具调用失败: tool={} args={} reason={}",
+                            request.name(), request.arguments(), cause.getMessage());
+                    return "Tool error: " + cause.getMessage();
+                }
+            }));
+        }
+
+        // 按请求顺序串行处理结果：保持 toolCall ↔ toolResult 的顺序对齐，
+        // 避免 chatMemory 顺序错乱导致下一轮 LLM 请求报错。
+        List<ToolExecutionResultMessage> toolResults = new ArrayList<>(requests.size());
+        for (int i = 0; i < requests.size(); i++) {
+            ToolExecutionRequest request = requests.get(i);
             String result;
             try {
-                result = toolExecutor.execute(request);
+                result = futures.get(i).get();
             } catch (Exception e) {
-                // 工具执行失败：把错误回传给模型，让它有机会重试或放弃；不要中断整个 agent
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
-                log.warn("工具调用失败: tool={} args={} reason={}",
-                        request.name(), request.arguments(), cause.getMessage());
                 result = "Tool error: " + cause.getMessage();
             }
             // langchain4j 要求 text 不能为空，兜底为 "ok"
@@ -439,12 +503,13 @@ public class ChatAgent {
             }
         }
 
-        String collect = toolResults
-            .stream()
-            .map(resp -> "工具" + resp.toolName() + "的返回结果为：" + resp.text())
-            .collect(Collectors.joining("\n"));
-
-        log.info("工具调用结果：{}", collect);
+        if (log.isDebugEnabled()) {
+            String collect = toolResults
+                .stream()
+                .map(resp -> "工具" + resp.toolName() + "的返回结果为：" + resp.text())
+                .collect(Collectors.joining("\n"));
+            log.debug("工具调用结果：{}", collect);
+        }
 
         refreshPendingMessages();
 
@@ -472,7 +537,7 @@ public class ChatAgent {
                 }
             }
             this.agentState = AgentState.FINISHED;
-            log.info("任务结束");
+            log.debug("任务结束");
         }
     }
 

@@ -51,5 +51,7 @@ public class SseMessage {
         AI_THINKING,
         AI_EXECUTING,
         AI_DONE,
+        /** Agent 运行时异常：把 errorMsg 放入 payload.delta 推给前端，前端可显示错误气泡。 */
+        AI_ERROR,
     }
 }

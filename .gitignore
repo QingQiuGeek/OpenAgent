@@ -1,5 +1,10 @@
 HELP.md
 target/
+
+# 环境变量（含密码/密钥）严禁入库；只保留 .env.example
+.env
+.env.local
+.env.*.local
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

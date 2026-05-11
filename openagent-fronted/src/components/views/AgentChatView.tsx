@@ -16,6 +16,7 @@ import {
   type UploadFileResponse,
 } from "../../api/api.ts";
 import { listMyMcpToolGroups, type McpToolGroupVO } from "../../api/mcpServer.ts";
+import { BASE_URL } from "../../api/http.ts";
 import { useAgents } from "../../hooks/useAgents.ts";
 import { useChatSessions } from "../../hooks/useChatSessions.ts";
 import { useKnowledgeBases } from "../../hooks/useKnowledgeBases.ts";
@@ -319,7 +320,7 @@ const AgentChatView: React.FC = () => {
   useEffect(() => {
     if (!chatSessionId || !user) return;
     const es = new EventSource(
-      `http://localhost:8080/sse/connect/${chatSessionId}`,
+      `${BASE_URL}/sse/connect/${chatSessionId}`,
       { withCredentials: true },
     );
     es.onmessage = (event) => {
@@ -353,6 +354,14 @@ const AgentChatView: React.FC = () => {
         setAgentStatusText(msg.payload.statusText);
         setAgentStatusType("AI_EXECUTING");
       } else if (msg.type === "AI_DONE") {
+        setDisplayAgentStatus(false);
+        setAgentStatusText("");
+        setAgentStatusType(undefined);
+        setStreamingContent("");
+        setIsAgentRunning(false);
+      } else if (msg.type === "AI_ERROR") {
+        // 后端 Agent 异常：toast 提示 + 结束 loading，不抛错避免断流
+        antdMessage.error(msg.payload.delta || "智能体运行失败，请稍后重试");
         setDisplayAgentStatus(false);
         setAgentStatusText("");
         setAgentStatusType(undefined);

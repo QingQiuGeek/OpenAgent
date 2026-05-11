@@ -1,8 +1,6 @@
 server:
   port: 8080
 spring:
-  profiles:
-    active: local
   application:
     name: openagent
   servlet:
@@ -12,12 +10,17 @@ spring:
       # 单次请求 30MB（最多 5 个 5MB 附件 + 富表单冗余）
       max-request-size: 30MB
   datasource:
-    url: jdbc:postgresql://localhost:5432/openagent?stringtype=unspecified
+    # 通过环境变量覆盖；本地不设环境变量则走默认值
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/openagent?stringtype=unspecified}
     driver-class-name: org.postgresql.Driver
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   mail:
-    host: smtp.qq.com
-    port: 465
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
     default-encoding: UTF-8
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -32,10 +35,11 @@ spring:
   data:
     redis:
       connect-timeout: 15
-      database: 2
-      host: 127.0.0.1
+      database: ${SPRING_DATA_REDIS_DATABASE:}
+      host: ${SPRING_DATA_REDIS_HOST:}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
       timeout: 100
-      port: 6379
+      port: ${SPRING_DATA_REDIS_PORT:6379}
       jedis:
         pool:
           enabled: true
@@ -46,17 +50,21 @@ spring:
 langchain4j:
   community:
     dashscope:
+      # 注意：ChatModel 在本项目走「自定义模型」机制（数据库 model 表 + DynamicChatModelServiceImpl
+      # 动态构建 OpenAiChatModel），不依赖 starter 自动装配，因此这里不再配置 chat-model。
+      # 仅 embedding-model 由 RagServiceImpl 注入使用。
       embedding-model:
+        api-key: ${DASHSCOPE_EMBEDDING_MODEL_API_KEY:}
         model-name: text-embedding-v3
         dimensions: 1024
 
 image-model:
   qwen:
     model-name: qwen-image-2.0-pro
-    api-key: ${DASHSCOPE_API_KEY:}
+    api-key: ${DASHSCOPE_QWEN_IMAGE_MODEL_API_KEY:}
   wanx:
     model-name: wan2.7-image-pro
-    api-key: ${DASHSCOPE_API_KEY:}
+    api-key: ${DASHSCOPE_WANX_IMAGE_MODEL_API_KEY:}
 
 mybatis-plus:
   configuration:
@@ -89,14 +97,19 @@ sa-token:
 
 document:
   storage:
-    base-path: ./data/documents
+    base-path: ${DOCUMENT_STORAGE_BASE_PATH:./data/documents}
 
 # Tavily 联网搜索 / 网页抓取
-# 优先读取环境变量 TAVILY_API_KEY；本地开发可在 application-local.yaml 中覆盖
 tavily:
   api-key: ${TAVILY_API_KEY:}
   url: ${TAVILY_URL:https://api.tavily.com/search}
   extract-url: ${TAVILY_EXTRACT_URL:https://api.tavily.com/extract}
+
+oss:
+  accessKey: ${OSS_ACCESS_KEY:}
+  secretKey: ${OSS_SECRET_KEY:}
+  bucket: ${OSS_BUCKET:}
+  url: ${OSS_URL:}
 
 # knife4j的增强配置，不需要增强可以不配
 knife4j:

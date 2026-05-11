@@ -1,0 +1,15 @@
+target/
+.idea/
+.vscode/
+*.iml
+*.log
+logs/
+.git/
+.gitignore
+README.md
+asset/
+openagent-fronted/
+data/
+**/node_modules/
+**/dist/
+HELP.md

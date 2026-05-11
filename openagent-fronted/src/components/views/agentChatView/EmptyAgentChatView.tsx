@@ -51,26 +51,35 @@ function useLoopTypewriter(
   return shown;
 }
 
-const QUICK_CARDS = [
+const QUICK_CARDS: ReadonlyArray<{
+  emoji: string;
+  title: string;
+  desc: string;
+  gradient: string;
+}> = [
   {
     emoji: "🤖",
     title: "智能对话",
     desc: "创建智能体助手，进行智能对话",
+    gradient: "from-indigo-100 to-purple-100 dark:from-indigo-900/40 dark:to-purple-900/40",
   },
   {
     emoji: "💡",
     title: "知识库问答",
     desc: "基于知识库进行RAG，准确问答",
+    gradient: "from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40",
   },
   {
     emoji: "💬",
     title: "自定义接入模型",
     desc: "设置APIKey和URL，选择厂商，一键调用",
+    gradient: "from-sky-100 to-cyan-100 dark:from-sky-900/40 dark:to-cyan-900/40",
   },
   {
     emoji: "⚡",
     title: "MCP/Tool调用",
     desc: "绑定MCP/Tool增强能力，支持联网搜索",
+    gradient: "from-emerald-100 to-teal-100 dark:from-emerald-900/40 dark:to-teal-900/40",
   },
 ];
 

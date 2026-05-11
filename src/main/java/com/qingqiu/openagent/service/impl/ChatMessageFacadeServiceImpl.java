@@ -1,10 +1,13 @@
 package com.qingqiu.openagent.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.qingqiu.openagent.agent.guardrail.SensitiveWordsInputGuardrail;
 import com.qingqiu.openagent.converter.ChatMessageConverter;
 import com.qingqiu.openagent.enums.BizExceptionEnum;
 import com.qingqiu.openagent.event.ChatEvent;
 import com.qingqiu.openagent.exception.BizException;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.guardrail.InputGuardrailResult;
 import com.qingqiu.openagent.mapper.ChatMessageMapper;
 import com.qingqiu.openagent.mapper.ChatSessionMapper;
 import com.qingqiu.openagent.model.dto.ChatMessageDTO;
@@ -39,6 +42,7 @@ public class ChatMessageFacadeServiceImpl implements ChatMessageFacadeService {
     private final ChatSessionMapper chatSessionMapper;
     private final ChatMessageConverter chatMessageConverter;
     private final ApplicationEventPublisher publisher;
+    private final SensitiveWordsInputGuardrail sensitiveWordsGuardrail;
 
     @Override
     public GetChatMessagesResponse getChatMessagesBySessionId(String sessionId) {
@@ -86,6 +90,17 @@ public class ChatMessageFacadeServiceImpl implements ChatMessageFacadeService {
             throw new BizException(BizExceptionEnum.PARAMS_ERROR.getCode(), "agentId 不能为空");
         }
         requireOwnedSession(request.getSessionId());
+
+        // 敏感词检测：用户文本入库前拦一次，命中直接抛业务异常，前端拿到 4xx 提示用户
+        if (request.getContent() != null && !request.getContent().isBlank()) {
+            InputGuardrailResult guard = sensitiveWordsGuardrail
+                    .validate(UserMessage.from(request.getContent()));
+            if (guard.isFatal()) {
+                throw new BizException(BizExceptionEnum.PARAMS_ERROR.getCode(),
+                        "内容包含敏感词，已被拦截");
+            }
+        }
+
         ChatMessage chatMessage = doCreateChatMessage(request);
         // 发布聊天通知事件
         publisher.publishEvent(new ChatEvent(

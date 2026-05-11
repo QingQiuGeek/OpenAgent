@@ -1,5 +1,7 @@
 CREATE DATABASE openagent;
 \connect   openagent;
+
+-- 启动pgvector向量扩展
 CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE "user" (
@@ -33,6 +35,7 @@ INSERT INTO enum_config(type, value) VALUES
     ('model_provider_type','qianwen'),
     ('model_provider_type','zhipu'),
     ('model_provider_type','ollama'),
+    ('model_provider_type','minimax'),
     ('tool_type','FIXED'),
     ('tool_type','OPTIONAL'),
     ('document_filetype','pdf'),

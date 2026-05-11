@@ -14,7 +14,11 @@ export interface RequestOptions extends RequestInit {
 }
 
 // 后端服务根地址。各业务模块前缀各异（/api、/user、/sse），在调用处显式拼。
-export const BASE_URL = "http://localhost:8080";
+// - 优先读取构建时注入的 VITE_API_BASE_URL（docker/生产部署用）
+// - 留空时回退到 http://localhost:8080，本地开发零配置
+export const BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined) ||
+  "http://localhost:8080";
 
 // 后端 BizExceptionEnum.NOT_LOGIN_ERROR
 export const NOT_LOGIN_CODE = 40200;
