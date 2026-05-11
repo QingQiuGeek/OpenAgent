@@ -58,7 +58,8 @@ public class LangChainToolExecutor {
                                 .name(toolName)
                                 .arguments(argumentsJson == null ? "{}" : argumentsJson)
                                 .build();
-                        return client.executeTool(req);
+                        // langchain4j-mcp 1.4+ executeTool 返回 ToolExecutionResult
+                        return client.executeTool(req).resultText();
                     });
                 }
                 log.info("[LangChainToolExecutor] 注入 MCP 工具 client={} count={}", client.key(), specs.size());

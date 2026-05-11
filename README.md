@@ -123,6 +123,8 @@ ivfflat 索引（10w+ 向量秒级召回）
 
 ![MCP 配置](./asset/mcp.png)
 
+![测试 MCP](./asset/testmcp.png)
+
 ### 5. 文件理解
 
 聊天附件 / 知识库统一走 Tika：pdf / docx / pptx / xlsx / md / html / txt 全支持。前端拖拽即上传、消息内一行展示。

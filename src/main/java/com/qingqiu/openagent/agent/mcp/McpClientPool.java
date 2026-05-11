@@ -6,7 +6,7 @@ import com.qingqiu.openagent.model.entity.McpServer;
 import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
 import dev.langchain4j.mcp.client.transport.McpTransport;
-import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport;
 import java.util.Arrays;
 import java.util.Collections;
@@ -61,7 +61,9 @@ public class McpClientPool {
         McpTransport transport;
         switch (transportType) {
             case "stdio" -> transport = buildStdio(cfg);
-            case "sse", "http" -> transport = buildHttp(cfg);
+            // sse / http / streamable_http 在 langchain4j-mcp 1.4+ 的 StreamableHttpMcpTransport
+            // 下行为完全等价（同一个实现自适应 JSON / SSE 流响应）。仅作语义标签区分。
+            case "sse", "http", "streamable_http" -> transport = buildHttp(cfg);
             default -> throw new IllegalStateException("未知的 mcp transport: " + cfg.getTransport());
         }
         try {
@@ -95,13 +97,17 @@ public class McpClientPool {
         if (url == null || url.isBlank()) {
             throw new IllegalStateException("sse / http 模式必须填写 url");
         }
-        // 注意：当前依赖版本 (langchain4j-mcp 1.1.0-beta7) 的 HttpMcpTransport.Builder
-        // 不支持自定义 headers；如有鉴权需求请等后续升级或用 stdio 包装代理。
-        return new HttpMcpTransport.Builder()
-                .sseUrl(url)
+        Map<String, String> headers = parseJsonStringMap(cfg.getHeaders());
+        // 使用新的 Streamable HTTP transport（MCP 2025-03 spec），向后兼容旧 SSE server。
+        // 旧的 HttpMcpTransport 自 langchain4j-mcp 1.4.0-beta10 起已 deprecated。
+        StreamableHttpMcpTransport.Builder builder = new StreamableHttpMcpTransport.Builder()
+                .url(url)
                 .logRequests(false)
-                .logResponses(false)
-                .build();
+                .logResponses(false);
+        if (!headers.isEmpty()) {
+            builder.customHeaders(headers);
+        }
+        return builder.build();
     }
 
     private Map<String, String> parseJsonStringMap(String json) {

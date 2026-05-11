@@ -297,3 +297,8 @@ html.dark .markdown-body table tr:nth-child(even) td { background: #1f1f23; }
 .side-menu-tabs .ant-tabs-tab { flex: 1 1 0; justify-content: center; margin: 0 !important; }
 .side-menu-tabs .ant-tabs-tab + .ant-tabs-tab { margin-left: 0 !important; }
 
+
+/* MCP 弹窗：紧凑表单  缩小 label 与 item 间距 */
+.mcp-compact-form .ant-form-item { margin-bottom: 10px; }
+.mcp-compact-form .ant-form-item-label { padding-bottom: 2px; }
+.mcp-compact-form .ant-form-item-label > label { font-size: 13px; }
