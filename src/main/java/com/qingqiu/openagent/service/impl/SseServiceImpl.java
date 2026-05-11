@@ -118,7 +118,8 @@ public class SseServiceImpl implements SseService {
     public void send(String chatSessionId, SseMessage message) {
         SseEmitter emitter = clients.get(chatSessionId);
         if (emitter == null) {
-            log.warn("No SSE client found for chatSessionId: {}, message dropped", chatSessionId);
+            // 用户刷新/关页/切会话是常态场景，WARN 会刷屏。需要排查时开 debug。
+            log.debug("[SSE] no client for sessionId={}, message dropped", chatSessionId);
             return;
         }
         try {
@@ -130,7 +131,8 @@ public class SseServiceImpl implements SseService {
             );
         } catch (IOException e) {
             // 发送失败说明对端已经掉线，清理 + 不抛出，避免影响业务流程
-            log.warn("[SSE] send 失败，移除 session={}, reason={}", chatSessionId, e.getMessage());
+            // send 写失败几乎总是“对端已断开”，不是程序错误；debug 级保留可调试性。
+            log.debug("[SSE] send 失败，移除 session={}, reason={}", chatSessionId, e.getMessage());
             clients.remove(chatSessionId);
             try {
                 emitter.completeWithError(e);

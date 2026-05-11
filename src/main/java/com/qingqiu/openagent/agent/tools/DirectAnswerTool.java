@@ -30,9 +30,10 @@ public class DirectAnswerTool implements ITool {
 
     @Tool(
             name = "directAnswer",
-            value = "Call this EXACTLY ONCE when you can fully answer the user's question without any other tool. "
+            value = "Deliver the FINAL answer to the user and end the conversation turn. "
                     + "Put the COMPLETE final answer for the user into the `message` argument (Markdown supported). "
-                    + "After this call, the conversation is finished — do not call directAnswer or terminate again."
+                    + "This is the ONLY way to finish a turn — always call this exactly once at the end of the turn, "
+                    + "do NOT leave the turn without calling it. After this call, the conversation is finished."
     )
     public String directAnswer(
             @P("The full final answer shown to the user. Required. Use Markdown if needed.")

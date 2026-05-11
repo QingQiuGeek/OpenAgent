@@ -28,7 +28,7 @@ public class DateTimeTool implements ITool {
         return ToolType.FIXED;
     }
 
-    @Tool(name = "dateTimeTool", value = "Get current dateTime")
+    // @Tool(name = "dateTimeTool", value = "Get current dateTime")
     public String dateTimeTool() {
         return DateTime.now().toString();
     }

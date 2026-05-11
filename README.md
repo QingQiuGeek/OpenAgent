@@ -78,17 +78,18 @@
 
 ### 1. ReAct Agent Loop（Think-Execute 循环）
 
-每条用户消息会驱动一个完整的 think → execute → … → terminate / directAnswer 循环：
+每条用户消息会驱动一个完整的 think → execute → … → directAnswer 循环：
 
-- **think 阶段**：把当前对话上下文 + 工具规格 + 当前时间 + 知识库列表 + 联网搜索提示打包送给 LLM，让模型决定"下一步做什么"
-- **execute 阶段**：拿到模型的 tool calls，**多工具并行执行**，结果回写到 chatMemory
-- **退出条件**：模型主动调 `directAnswer` / `terminate`，或达到 `MAX_STEPS` 兜底
+- **think 阶段**：按资源拼 <context>/<available_knowledge_bases>/<available_tools>/<decision_procedure>/<hard_constraints> 的 XML 结构提示词，让模型在元对话 / 后处理 / 需要外部能力 / 能力不具备 / 可凭通识回答五个分支中选路线
+- **execute 阶段**：拿到模型的 tool calls，**多工具并行执行**，结果回写到 chatMemory（同时运行 Tier 1 截断，避免单条工具返回撞爆上下文）
+- **退出条件**：模型调一次 `directAnswer.message` 赋予最终答案（唯一结束信号，不会出现"终止了但用户看不到内容"的体验问题），或达到 `MAX_STEPS` 兑底
 
 > 自实现而非用 `@AiService`：因为框架自动模式拿不到中间状态，无法 SSE 实时推送 / 中途打断 / 切换工具子集 / 注入动态 prompt。
 
 ### 2. 工具系统
 
-- 工具按角色分为 `FIXED`（必带：directAnswer、terminate、searchKb）和 `OPTIONAL`（按 agent 配置：webSearch、qwenGenerateImage 等）
+- 工具按角色分为 `FIXED`（必带：directAnswer）和 `OPTIONAL`（按 agent 配置：webSearch、qwenGenerateImage、knowledgeRetrieve 等）
+- `LangChainToolExecutor` 初始化时体检 `MANDATORY_TOOL_NAMES`，缺失核心工具直接启动报错，避免 LLM 陷入"无可调工具”的运行时悖论
 - 每个 `@Tool` 方法运行时被反射注册到 `invokerByToolName`，参数支持 `@P` 描述自动写入 JSON Schema
 - 同一轮 multi-tool call 走 `CompletableFuture` 并行，按请求顺序回填结果，**不会破坏 toolCall ↔ toolResult 配对**
 
@@ -125,6 +126,8 @@ ivfflat 索引（10w+ 向量秒级召回）
 
 ![测试 MCP](./asset/testmcp.png)
 
+![MCP 列表](./asset/mcplist.png)
+
 ### 5. 文件理解
 
 聊天附件 / 知识库统一走 Tika：pdf / docx / pptx / xlsx / md / html / txt 全支持。前端拖拽即上传、消息内一行展示。
@@ -133,10 +136,7 @@ ivfflat 索引（10w+ 向量秒级召回）
 
 ### 6. 联网搜索（Tavily）
 
-按消息粒度开关。开启时：
-
-- think prompt 注入 "用户已开启联网搜索，遇到时效性、新闻、最新数据等问题**必须**调用 webSearch"
-- 模型选择是否调用，结果会被作为 `sources` 引用块展示
+按消息粒度开关。开启时 `webSearchTool` 动态加入当前会话的 `<available_tools>` 列表，依靠决策提示词中的 (C) 分支让模型自己按“语义医配”选择是否调用，不再硬编码 "用户已开启 X" 类反向诱导话术。返回结果自动作为 `sources` 引用块展示。
 
 ![联网搜索](./asset/联网搜索.png)
 

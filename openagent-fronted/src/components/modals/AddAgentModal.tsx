@@ -65,7 +65,7 @@ const AddAgentModal: React.FC<AddAgentModalProps> = ({
   const [formData, setFormData] = useState<CreateAgentRequest>({
     name: "智能体助手",
     description: "",
-    systemPrompt: "你是一个OpenAgent智能体助手，擅长调用工具（如有）、mcp（如有）、查询知识库为用户解答问题",
+    systemPrompt: "你是一个OpenAgent智能体助手，擅长调用工具、mcp、知识库（如有）为用户解答问题",
     modelId: 0,
     allowedTools: [],
     allowedKbs: [],

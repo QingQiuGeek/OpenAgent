@@ -15,6 +15,7 @@ import com.qingqiu.openagent.service.ChatMessageFacadeService;
 import com.qingqiu.openagent.service.SseService;
 import dev.langchain4j.model.output.TokenUsage;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.SystemMessage;
@@ -32,7 +33,6 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -84,9 +84,9 @@ public class ChatAgent {
     private String chatSessionId;
 
     // 最多循环次数
-    private static final Integer MAX_STEPS = 20;
+    private static final Integer MAX_STEPS = 10;
 
-    private static final Integer DEFAULT_MAX_MESSAGES = 20;
+    private static final Integer DEFAULT_MAX_MESSAGES = 50;
 
     // SSE 服务, 用于发送消息给前端
     private SseService sseService;
@@ -375,37 +375,189 @@ public class ChatAgent {
         }
     }
 
+    // ============================================================
+    // 工具循环保护：防止模型在同一工具上死磕
+    // ------------------------------------------------------------
+    // 触发场景：tavily 返回 answer=null、检索结果空、工具失败等情况下，
+    // 模型容易换 query 反复重试，永远不 directAnswer。
+    // 双层保护：
+    //   L1 (≥WARN_THRESHOLD): 往 thinkPrompt 注入 urgent_override，警告模型必须收尾
+    //   L2 (≥HARD_THRESHOLD): ChatAgent 直接合成兜底 AiMessage，强制 FINISHED
+    // ============================================================
+    private static final int LOOP_WARN_THRESHOLD = 3;
+    private static final int LOOP_HARD_THRESHOLD = 4;
+
+    /**
+     * 根据当前 toolCallCounts 构造 L1 警告段。某工具 ≥ LOOP_WARN_THRESHOLD
+     * 但 < LOOP_HARD_THRESHOLD 时插入；否则返回空串。
+     */
+    private static String buildLoopOverride(java.util.Map<String, Integer> counts) {
+        String hotTool = null;
+        int hotCount = 0;
+        for (var e : counts.entrySet()) {
+            if (e.getValue() >= LOOP_WARN_THRESHOLD && e.getValue() > hotCount) {
+                hotCount = e.getValue();
+                hotTool = e.getKey();
+            }
+        }
+        if (hotTool == null) return "";
+        return String.format("""
+
+                <urgent_override>
+                ⚠️ 检测到工具 `%s` 在本会话中已被调用 %d 次。**本轮你必须立即调用 `directAnswer`**：
+                把已收集到的任何信息（即使不完整）整合成最终答案交付用户；如确实无法回答就坦诚告知。
+                **禁止**再以任何参数调用 `%s` 或其它检索/查询工具。
+                </urgent_override>
+                """, hotTool, hotCount, hotTool);
+    }
+
+    /** 统计本会话内每个非 directAnswer 工具被调用了多少次。 */
+    private java.util.Map<String, Integer> countToolCallsInMemory() {
+        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        for (ChatMessage m : this.chatMemory) {
+            if (m instanceof AiMessage am && am.hasToolExecutionRequests()) {
+                for (ToolExecutionRequest req : am.toolExecutionRequests()) {
+                    if (!"directAnswer".equals(req.name())) {
+                        counts.merge(req.name(), 1, Integer::sum);
+                    }
+                }
+            }
+        }
+        return counts;
+    }
+
     // thinkPrompt 应该放到 system 中还是
     private boolean think() {
-        String webSearchHint = webSearch
-                ? "\n- 用户已开启「联网搜索」，遇到时效性、新闻、最新数据等问题时，**必须**调用 webSearch 工具获取实时信息，再基于搜索结果回答；不要凭训练记忆作答。"
-                : "\n- 用户未开启联网搜索；如遇明显时效性问题（今天/最近/最新/当前/x 年 x 月以来等），请提示用户开启联网搜索或调用相关工具。";
-        // 把当前时间注入 prompt，避免模型用 2024 等过期数据回答时效性问题
+        // 当前真实时间，用于锚定时效性问题。
         String nowText = java.time.LocalDateTime.now()
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+        // L2 硬兜底：某工具被调用次数 ≥ LOOP_HARD_THRESHOLD，直接强制结束。
+        // 不再 think，避免无意义的额外 LLM 调用与 token 浪费。
+        java.util.Map<String, Integer> toolCallCounts = countToolCallsInMemory();
+        String overflowTool = null;
+        int overflowCount = 0;
+        for (var e : toolCallCounts.entrySet()) {
+            if (e.getValue() > overflowCount) {
+                overflowCount = e.getValue();
+                overflowTool = e.getKey();
+            }
+        }
+        if (overflowTool != null && overflowCount >= LOOP_HARD_THRESHOLD) {
+            log.warn("[ChatAgent] 检测到工具循环 tool={} count={}，强制收尾", overflowTool, overflowCount);
+            String fallback = String.format(
+                    "我已多次尝试通过 `%s` 工具获取信息（共 %d 次），但仍未能拿到足够明确的结果。" +
+                    "可能原因：该工具暂时不可用、查询条件过于具体、或目标信息确实难以从公开渠道实时获得。" +
+                    "建议你换个角度提问，或稍后再试。",
+                    overflowTool, overflowCount);
+            AiMessage synthetic = AiMessage.from(fallback);
+            addToMemory(synthetic);
+            saveMessage(synthetic);
+            refreshPendingMessages();
+            return false; // step() 看到 false 会把状态置为 FINISHED
+        }
+
+        // 工具卡片：name + description。LLM 仅依据描述判断能力，不要在代码里替它做分类。
+        // description 截断 200 字，避免 prompt 失衡（个别 MCP 工具 desc 超长）。
+        List<ToolSpecification> specs = this.toolExecutor.getToolSpecifications();
+        String availableToolsText;
+        if (specs == null || specs.isEmpty()) {
+            availableToolsText = "（当前无任何工具可用）";
+        } else {
+            availableToolsText = specs.stream()
+                    .map(s -> {
+                        String desc = s.description() == null ? "" : s.description().trim();
+                        if (desc.length() > 200) desc = desc.substring(0, 200) + "...";
+                        return "- " + s.name() + (desc.isEmpty() ? "" : ": " + desc);
+                    })
+                    .collect(Collectors.joining("\n"));
+        }
+
+        // 知识库卡片：仅给 id + name + description，避免 LLM 过度依赖 toString 输出格式。
+        String availableKbsText;
+        if (this.availableKbs == null || this.availableKbs.isEmpty()) {
+            availableKbsText = "（当前无任何知识库）";
+        } else {
+            availableKbsText = this.availableKbs.stream()
+                    .map(kb -> "- id=" + kb.getId() + " | " + kb.getName()
+                            + (kb.getDescription() == null ? "" : " | " + kb.getDescription()))
+                    .collect(Collectors.joining("\n"));
+        }
+
         String thinkPrompt = """
-                现在你是OpenAgent智能体的具体「决策模块」
-                请根据当前对话上下文，决定下一步的动作。
-                                \s
-                【额外信息】
-                - 当前系统时间（**真实当前时间，请以此为准，不要使用训练数据中的旧时间**）：%s
-                - 你目前拥有的知识库列表以及描述：%s
-                - 如果有缺失的上下文时，优先从知识库中进行搜索%s
+                你负责思考决策，本轮必须以**工具调用**的形式输出决策动作，不要输出自由文本。
+                - 当任务天然可以并行（例如同时检索多个知识库、同时联网搜索 + 查知识库）且各工具之间**没有前后依赖**时，
+                  允许在本轮一次性发起多个工具调用，平台会并行执行并把所有结果一起交给下一轮决策；
+                - 有前后依赖（A 的输出作为 B 的输入）时，本轮只发 A，等 A 的结果回来下一轮再发 B。
 
-                【输出规则（务必遵守）】
-                - 当用户问候 / 闲聊 / 自我介绍类问题（如"你好"、"你是谁"、"能做什么"），
-                  **第一轮直接调用 `directAnswer` 给最终答案**，不要先调任何检索/搜索工具，避免无谓兜圈子。
-                - 当上一步刚刚有「返回了具体内容」的工具（例如 webSearch、知识库检索、qwenGenerateImage 等）时，
-                  必须用 `directAnswer` 工具，把工具返回的关键信息（图片链接、引用、答案）原样写进 `message` 参数交给用户；
-                  不要直接 `terminate`，否则用户看不到任何输出。
-                - 调用 `directAnswer` 时，`message` 参数必须非空，且包含完整的最终答案；不要传空串或 "ok"。
-                - 仅当确实无内容可回（如已经在上一条回复里说完）才用 `terminate`。
-                - 涉及"今天/最近/最新/当前/x 年 x 月以来"等时效性问题时，先用上面的当前时间锚定时间范围；
-                  必要时调用 webSearch（用户已开启联网搜索）或时间工具校准，再回答。
-                """.formatted(nowText, this.availableKbs, webSearchHint);
+                <context>
+                - 当前时间: %s
+                </context>
 
-            List<ChatMessage> requestMessages = new ArrayList<>(this.chatMemory);
+                <available_knowledge_bases>
+                %s
+                </available_knowledge_bases>
+
+                <available_tools>
+                %s
+                </available_tools>
+
+                <decision_procedure>
+                按下列顺序判定用户消息所属类别，**取第一个匹配项**作为本轮动作来源：
+
+                (A) **元对话 / 闲聊 / 能力询问**
+                    判定：消息无需任何外部数据、计算或检索，仅凭通识或对自己身份的认知就能给出令人满意的回答。
+                    例如：寒暄、问候、自我介绍、询问你是谁/能做什么、表达情绪、闲聊话题。
+                    动作：直接调用 `directAnswer`，`message` 中给出自然友好的最终回复。
+
+                (B) **后处理（上一步工具刚返回了实质内容）**
+                    判定：对话历史中**最近一条 ToolExecutionResult** 含有图片链接 / 列表 / 数据 / 文本答案等可读内容。
+                    动作：调用 `directAnswer`，把这些关键信息整合进 `message` 交给用户。**禁止**重复调同一个工具。
+
+                (C) **需要外部能力的任务**
+                    判定：任务依赖以下任意一种能力——最新资讯 / 特定领域数据 / 数学或代码计算 / 生成图像或音频 /
+                    抓取或解析网页 / 数据库或知识库检索 / 任何超出你训练截止的事实。
+                    特别地：消息含"今天 / 最近 / 最新 / 当前 / 本周 / 本月 / x 年 x 月以来 / 现在"等时效性表述时，
+                    先用 <context> 当前时间锚定时间范围。
+                    动作：在 <available_tools> 中**逐个阅读工具描述**，挑选语义最匹配的工具调用。
+                    举例：要联网就找描述里提到 search / 搜索 / web / 联网 / news / 资讯 / 抓取等概念的工具；
+                    要查知识库就找 knowledge / 召回 / retrieve 类工具并配合 <available_knowledge_bases> 选 id。
+
+                (D) **任务需要某能力，但 <available_tools> 中没有匹配工具**
+                    判定：阅读完所有工具描述后，找不到能完成该任务的工具。
+                    动作：调用 `directAnswer`，**坦诚告知**用户当前 Agent 不具备该能力。"
+                    **禁止**凭训练记忆编造时效性事实。
+
+                (E) **可凭通识回答且无时效性**
+                    判定：(C)(D) 都不成立，问题属于稳定知识（数学定理、历史事件、概念解释等）。
+                    动作：直接 `directAnswer`，给出完整准确的最终答案。
+                </decision_procedure>
+
+                <hard_constraints>
+                1. 工具能力**只能**从 <available_tools> 中真实列出的条目识别。不要假设存在未列出的工具，
+                   不要把"用户没开启 X"作为回答理由——如果列表里有等价工具就直接用。
+                2. `directAnswer.message` 必须非空、必须是给用户看的完整最终答案，禁止 "ok"/"好的"/"已收到"/空串。
+                3. 每个会话最终必须以一次 `directAnswer` 收尾。不要在会话未给用户交付最终答案前处于“何也不做”的状态。
+                4. 同一轮决策只调一个工具。需要多步（先检索再总结）时，本轮先调检索工具，下一轮再 `directAnswer`。
+                5. **重复定义**：判断"是否重复调用"以**工具名**为准，不论参数。`tavily_search(q=A)` 与
+                   `tavily_search(q=B)` 视为同一工具的两次调用。同名工具在本会话中累计调用 ≥ 3 次后，
+                   **必须 directAnswer**，基于已收集到的任何信息给出最终答案，**禁止**再换 query 重试。
+                6. **"信息够用"判断**：工具返回 JSON 含 `results`/`items`/`data`/`content` 等数组字段且非空时，
+                   即视为获得了实质内容，**应当 directAnswer**。不要因 `answer`/`summary` 字段为 null 就再次重试。
+                </hard_constraints>
+                %s
+                """.formatted(nowText, availableKbsText, availableToolsText, buildLoopOverride(toolCallCounts));
+
+            // 清洗 chatMemory（仅针对本次请求的快照，不改 chatMemory 本身）：
+            // 保证 messages[0] 是 system/user、工具轮次配对完整、AiMessage.text 非 null。
+            List<ChatMessage> baseMessages = MessageSanitizer.sanitize(this.chatMemory);
+            // 关键：thinkPrompt 必须放在 messages **最前面**作为首条 SystemMessage。
+            // 之前放在末尾时，某些 OpenAI 兼容端（DeepSeek/Qwen 等）会把它当成"用户上下文延续"，
+            // 导致模型直接 echo thinkPrompt 内容当作回答（看到过 "你负责思考决策..." 被原文输出）。
+            // 放在最前面后，它就是清晰的"系统指令"，模型不会再回显。
+            List<ChatMessage> requestMessages = new ArrayList<>();
             requestMessages.add(SystemMessage.from(thinkPrompt));
+            requestMessages.addAll(baseMessages);
 
             ChatRequest request = ChatRequest.builder()
                 .messages(requestMessages)
@@ -445,18 +597,50 @@ public class ChatAgent {
 
         List<ToolExecutionRequest> requests = this.lastAiMessage.toolExecutionRequests();
 
-        // 多工具并行执行：当一轮 think 同时召唤了 N 个工具（例如同时查 KB1+KB2、或一边 webSearch 一边查 KB），
-        // 用并行减少串行等待。directAnswer / terminate 这种瞬时本地工具混在里面也无副作用。
+        // ============================================================
+        // 同轮 dedup（方案 B）：相同工具名只真正执行 1 次，重复者共享首个结果
+        // ------------------------------------------------------------
+        // 触发场景：模型在同一轮 think 里发起多个 knowledgeTool / tavily_search 等
+        // 同名调用（不同 query 但语义相近）。直接执行会浪费 token、产生重复引用来源。
+        // 实现：建立 name -> 首次出现 idx 的映射，N 个相同 name 的 toolCall 都共用
+        //       同一个 future 的结果；toolCall ↔ toolResult 仍按 1:1 顺序对齐，
+        //       不破坏 langchain4j 配对校验。
+        // ============================================================
+        java.util.Map<String, Integer> nameToFirstIdx = new java.util.LinkedHashMap<>();
+        int[] sharedIdx = new int[requests.size()];
+        for (int i = 0; i < requests.size(); i++) {
+            String name = requests.get(i).name();
+            Integer first = nameToFirstIdx.get(name);
+            if (first == null) {
+                nameToFirstIdx.put(name, i);
+                sharedIdx[i] = i;
+            } else {
+                sharedIdx[i] = first;
+                log.info("[ChatAgent] 同轮内重复工具 dedup: name={} idx={} 复用 idx={} 的结果",
+                        name, i, first);
+            }
+        }
+
+        // 仅对首次出现的请求真正并行执行
         List<CompletableFuture<String>> futures = new ArrayList<>(requests.size());
-        for (ToolExecutionRequest request : requests) {
+        for (int i = 0; i < requests.size(); i++) {
+            if (sharedIdx[i] != i) {
+                futures.add(null); // 占位，后面按 sharedIdx 映射读取
+                continue;
+            }
+            final ToolExecutionRequest request = requests.get(i);
             futures.add(CompletableFuture.supplyAsync(() -> {
                 try {
                     return toolExecutor.execute(request);
                 } catch (Exception e) {
                     Throwable cause = e.getCause() != null ? e.getCause() : e;
-                    log.warn("工具调用失败: tool={} args={} reason={}",
-                            request.name(), request.arguments(), cause.getMessage());
-                    return "Tool error: " + cause.getMessage();
+                    String reason = cause.getMessage() != null
+                            ? cause.getMessage()
+                            : cause.getClass().getSimpleName();
+                    log.warn("工具调用失败: tool={} args={} cause={} reason={}",
+                            request.name(), request.arguments(),
+                            cause.getClass().getSimpleName(), reason);
+                    return "Tool error: " + reason;
                 }
             }));
         }
@@ -468,7 +652,8 @@ public class ChatAgent {
             ToolExecutionRequest request = requests.get(i);
             String result;
             try {
-                result = futures.get(i).get();
+                // dedup：重复 toolCall 复用首个 idx 的执行结果
+                result = futures.get(sharedIdx[i]).get();
             } catch (Exception e) {
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
                 result = "Tool error: " + cause.getMessage();
@@ -477,11 +662,13 @@ public class ChatAgent {
             if (result == null || result.isBlank()) {
                 result = "ok";
             }
-            // 提取来源引用
-            try {
-                extractSources(request.name(), result);
-            } catch (Exception e) {
-                log.warn("提取 sources 失败: tool={}", request.name(), e);
+            // 提取来源引用（dedup：重复 toolCall 共享同一 result，只对首次 idx 提取一次）
+            if (sharedIdx[i] == i) {
+                try {
+                    extractSources(request.name(), result);
+                } catch (Exception e) {
+                    log.warn("提取 sources 失败: tool={}", request.name(), e);
+                }
             }
             ToolExecutionResultMessage resultMessage = ToolExecutionResultMessage.from(request, result);
             toolResults.add(resultMessage);
@@ -513,53 +700,16 @@ public class ChatAgent {
 
         refreshPendingMessages();
 
-        // directAnswer / terminate 都是“任务已完成”信号：
-        // - terminate：明确的结束信号
-        // - directAnswer：模型表示本轮已给出答案、不需要再调其他工具
-        // 以前仅 terminate 才结束，导致“你是谁”这种简单问题也会多次 think 后才结束。
+        // directAnswer 是唯一的会话结束信号：模型主动决定“本轮已给出最终回复”。
+        // terminate 已废弃：之前它的唯一价值“只结束不说话”反而会造成用户看不到内容，
+        // 现在强制模型始终用 directAnswer.message 交付结果，体验更一致。
         boolean shouldFinish = toolResults.stream()
                 .map(ToolExecutionResultMessage::toolName)
-                .anyMatch(name -> "terminate".equals(name) || "directAnswer".equals(name));
+                .anyMatch("directAnswer"::equals);
         if (shouldFinish) {
-            // 兜底：模型直接 terminate 但本轮 AI 正文为空（没复述上一轮工具结果），
-            // 把最近一个有内容的工具返回（如 qwenGenerateImage 的 markdown）作为最终回复推给用户。
-            boolean onlyTerminate = toolResults.stream()
-                    .map(ToolExecutionResultMessage::toolName)
-                    .allMatch("terminate"::equals);
-            if (onlyTerminate
-                    && (this.lastAiMessage == null || !StringUtils.hasText(this.lastAiMessage.text()))) {
-                String fallback = findRecentToolResultText();
-                if (StringUtils.hasText(fallback)) {
-                    log.info("[ChatAgent] terminate 兜底：使用上一轮工具结果作为最终回复");
-                    AiMessage synthetic = AiMessage.from(fallback);
-                    saveMessage(synthetic);
-                    refreshPendingMessages();
-                }
-            }
             this.agentState = AgentState.FINISHED;
             log.debug("任务结束");
         }
-    }
-
-    /**
-     * 从 chatMemory 倒序找最近一个「非 terminate / 非 directAnswer」工具的返回文本。
-     * 用于 terminate 时模型没复述工具结果的兜底。
-     */
-    private String findRecentToolResultText() {
-        // chatMemory 是 Deque，没有 get(int)；用 descendingIterator 从尾到头遍历
-        Iterator<ChatMessage> it = this.chatMemory.descendingIterator();
-        while (it.hasNext()) {
-            ChatMessage cm = it.next();
-            if (cm instanceof ToolExecutionResultMessage tr) {
-                String name = tr.toolName();
-                if ("terminate".equals(name) || "directAnswer".equals(name)) continue;
-                String text = tr.text();
-                if (StringUtils.hasText(text) && !"ok".equals(text)) {
-                    return text;
-                }
-            }
-        }
-        return null;
     }
 
     /**

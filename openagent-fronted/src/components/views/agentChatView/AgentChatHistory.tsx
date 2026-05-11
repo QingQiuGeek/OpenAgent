@@ -9,7 +9,9 @@ import {
   DownOutlined,
   RightOutlined,
   LoadingOutlined,
+  PictureOutlined,
 } from "@ant-design/icons";
+import { Progress } from "antd";
 import type { ChatMessageVO, SseMessageType, ToolCall, ToolResponse } from "../../../types";
 import PreBlock from "./CodeBlock";
 import MessageActions from "./MessageActions";
@@ -121,6 +123,97 @@ const AI_BUBBLE_STYLES = {
 const AI_BUBBLE_CLASSNAMES = {
   body: "!items-start",
 };
+
+// ============================================================
+// 图片生成占位卡：检测到 qwenGenerateImage 工具调用尚未回包时显示
+// ------------------------------------------------------------
+// 设计权衡：DashScope MultiModalConversation.call 是同步阻塞接口，
+// 拿不到真实进度。这里用 atan 缓和曲线的“伪进度”（永不到 100%），
+// 工具实际返回后整个卡片会被替换为真正的 AI 回复（含 markdown 图）。
+// 体验上：用户看到“正在生成”而不是冰冷的“思考中…”，知道发生了什么。
+// ============================================================
+const NAME_QWEN_IMAGE = "qwenGenerateImage";
+
+const ImageGeneratingCard: React.FC<{
+  prompt: string;
+  size?: string;
+}> = ({ prompt, size }) => {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  // 伪进度：以 30s 为典型耗时心理预期，atan 曲线，封顶 96%
+  const percent = Math.min(96, Math.floor(((Math.atan(elapsed / 12) / (Math.PI / 2)) * 100)));
+  const promptPreview = prompt.length > 80 ? prompt.slice(0, 80) + "…" : prompt;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-xl border border-gray-700/60 bg-gradient-to-br from-gray-900 to-gray-800 px-4 py-3 text-gray-200 shadow-lg"
+      style={{ minWidth: 320, maxWidth: 480 }}
+    >
+      {/* 顶部 */}
+      <div className="mb-2 flex items-center gap-2">
+        <PictureOutlined className="text-blue-400" />
+        <span className="font-medium text-white">正在生成图片</span>
+        <LoadingOutlined spin className="ml-1 text-blue-400" />
+        <span className="ml-auto font-mono text-xs text-gray-400">{elapsed}s</span>
+      </div>
+
+      {/* 提示词预览 */}
+      <div className="mb-2 line-clamp-2 text-xs leading-relaxed text-gray-300">
+        {promptPreview}
+      </div>
+
+      {/* 伪进度条 */}
+      <Progress
+        percent={percent}
+        showInfo={false}
+        strokeColor={{ from: "#60a5fa", to: "#a78bfa" }}
+        trailColor="rgba(255,255,255,0.08)"
+        size="small"
+      />
+
+      {/* 底栏：尺寸 + 提示 */}
+      <div className="mt-1 flex items-center justify-between text-[11px] text-gray-500">
+        <span>{size || "2048×2048"}</span>
+        <span>通常 20~60 秒</span>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * 倒序扫描 messages，找到最近一个未回包的 qwenGenerateImage 工具调用。
+ * 返回该 toolCall 的入参，由 ImageGeneratingCard 展示。
+ */
+function findPendingImageGen(messages: ChatMessageVO[]): { prompt: string; size?: string } | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === "assistant" && m.metadata?.toolCalls?.length) {
+      const call = m.metadata.toolCalls.find((c) => c.name === NAME_QWEN_IMAGE);
+      if (call) {
+        // 看后面是否已经有对应的 toolResponse
+        const responded = messages
+          .slice(i + 1)
+          .some((n) => n.role === "tool" && n.metadata?.toolResponse?.id === call.id);
+        if (!responded) {
+          let args: { prompt?: string; size?: string } = {};
+          try {
+            args = JSON.parse(call.arguments);
+          } catch {
+            /* ignore */
+          }
+          return {
+            prompt: typeof args.prompt === "string" ? args.prompt : call.arguments,
+            size: typeof args.size === "string" ? args.size : undefined,
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
 
 // 工具调用展示组件（简化版，用于 assistant 消息内）
 const ToolCallDisplay: React.FC<{ toolCall: ToolCall }> = ({ toolCall }) => {
@@ -500,6 +593,9 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
         const showStreaming = !!streamingContent;
         if (!showThinking && !showStreaming) return null;
 
+        // 优先检测是否正在生成图片，有则换成图片生成卡片代替“思考中…”
+        const pendingImg = showThinking ? findPendingImageGen(messages) : null;
+
         const inner = showStreaming ? (
           <div className="w-full min-w-0 max-w-full">
             <div className="markdown-body min-w-0">
@@ -511,6 +607,8 @@ const AgentChatHistory: React.FC<AgentChatHistoryProps> = ({
               </XMarkdown>
             </div>
           </div>
+        ) : pendingImg ? (
+          <ImageGeneratingCard prompt={pendingImg.prompt} size={pendingImg.size} />
         ) : (
           <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
             <LoadingOutlined spin />

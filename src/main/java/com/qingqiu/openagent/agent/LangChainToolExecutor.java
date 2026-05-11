@@ -81,10 +81,22 @@ public class LangChainToolExecutor {
         return invoker.invoke(request.arguments());
     }
 
+    /** 系统强制工具：决策模块依赖它作为"给最终答案 + 结束会话"的唯一信号。 */
+    private static final List<String> MANDATORY_TOOL_NAMES = List.of("directAnswer");
+
     private void init(List<ITool> iTools) {
         for (ITool iTool : iTools) {
             toolSpecifications.addAll(ToolSpecifications.toolSpecificationsFrom(iTool));
             registerInvokers(iTool);
+        }
+        // 体检：系统工具必须注册成功，否则 think() prompt 的整套决策树都失效。
+        // 缺失时直接抛错让启动/会话失败，避免运行时 LLM 陷入无可调工具的悖论。
+        for (String mandatory : MANDATORY_TOOL_NAMES) {
+            if (!invokerByToolName.containsKey(mandatory)) {
+                throw new IllegalStateException(
+                        "[LangChainToolExecutor] 缺少强制工具: " + mandatory
+                                + "；请检查对应 @Component @Tool bean 是否生效");
+            }
         }
     }
 

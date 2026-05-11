@@ -7,9 +7,12 @@ import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationP
 import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationResult;
 import com.alibaba.dashscope.common.MultiModalMessage;
 import com.alibaba.dashscope.common.Role;
+import com.alibaba.dashscope.exception.ApiException;
 import com.qingqiu.openagent.enums.BizExceptionEnum;
 import com.qingqiu.openagent.exception.BizException;
 import com.qingqiu.openagent.util.OSSUtil;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import java.time.LocalDateTime;
@@ -117,10 +120,54 @@ public class QwenGenImageTool implements ITool {
           + "verbatim into your final answer to the user, then add any extra description you like.";
     } catch (BizException be) {
       throw be;
+    } catch (ApiException apiEx) {
+      // DashScope SDK 的 ApiException.getMessage() 经常为 null，真实错误体藏在 toString() 里，
+      // 形如：{"statusCode":400,"message":"Input data is suspected of being involved in IP infringement.","code":"IPInfringementSuspect",...}
+      String friendly = parseDashScopeError(apiEx);
+      log.error("[QwenGenImageTool] DashScope 拒绝：{}", friendly);
+      // 不抛异常，直接返回友好文本给 LLM —— LLM 会把这条文字组装到 directAnswer 里展示给用户。
+      // 这样比 throw 让 ChatAgent 拼 "Tool error: null" 体验好得多。
+      return "图片生成失败：" + friendly;
     } catch (Exception e) {
       log.error("[QwenGenImageTool] generate failed", e);
-      throw new BizException(BizExceptionEnum.REQUEST_ERROR.getCode(), e.getMessage());
+      String msg = e.getMessage() != null ? e.getMessage()
+              : e.getClass().getSimpleName() + ": " + e;
+      return "图片生成失败：" + msg;
     }
+  }
+
+  /**
+   * 解析 DashScope ApiException 中的真实错误码与消息。
+   * 已知典型错误码 → 人话翻译，让用户看明白：
+   * <ul>
+   *   <li>IPInfringementSuspect：内容涉及受版权保护的 IP（如卡通形象），平台拒绝生成</li>
+   *   <li>DataInspectionFailed：内容审查未通过</li>
+   *   <li>InvalidApiKey / Throttling：配置/限速问题</li>
+   * </ul>
+   */
+  private static String parseDashScopeError(ApiException apiEx) {
+    String raw = apiEx.getMessage();
+    if (raw == null) raw = apiEx.toString();
+    String code = "";
+    String message = raw;
+    try {
+      // 错误体可能含也可能不含 JSON；用 hutool 健壮解析
+      int braceIdx = raw.indexOf('{');
+      if (braceIdx >= 0 && JSONUtil.isTypeJSON(raw.substring(braceIdx))) {
+        JSONObject json = JSONUtil.parseObj(raw.substring(braceIdx));
+        code = json.getStr("code", "");
+        message = json.getStr("message", message);
+      }
+    } catch (Exception ignore) { /* 解析失败用原文 */ }
+
+    String hint = switch (code) {
+      case "IPInfringementSuspect" -> "请求内容疑似涉及受版权保护的卡通 / 影视 / 商业 IP，平台依据版权审查拒绝生成。请改用通用描述（例如：'灰色拟人化狼角色，可爱风格'）。";
+      case "DataInspectionFailed" -> "请求内容未通过内容安全审查。";
+      case "InvalidApiKey", "AccessDenied" -> "DashScope API Key 无效或权限不足，请联系管理员检查 image-model.qwen.api-key。";
+      case "Throttling", "Throttling.RateQuota" -> "调用过于频繁，已触发限速。请稍后再试。";
+      default -> "";
+    };
+    return StrUtil.isBlank(hint) ? message : message + "（" + hint + "）";
   }
 
   /**
