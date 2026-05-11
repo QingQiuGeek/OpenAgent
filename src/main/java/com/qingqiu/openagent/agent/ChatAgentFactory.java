@@ -162,7 +162,10 @@ public class ChatAgentFactory {
                     throw new IllegalStateException("不支持的 Message 类型");
             }
         }
-        return memory;
+        // 从 DB 恢复的历史可能在边界处被截断（曾经的中断 / 服务重启 / 数据库 flush 不完整），
+        // 通过 MessageSanitizer 在装入 ChatAgent 前先清洗一遍：
+        // 丢掉头部 orphan ai/tool 与未配对的工具轮次，保证 chatMemory 一上来就是合法状态。
+        return MessageSanitizer.sanitize(memory);
     }
 
     /**

@@ -187,8 +187,60 @@ public class ChatAgent {
 
     private void addToMemory(ChatMessage message) {
         this.chatMemory.addLast(message);
-        while (this.chatMemory.size() > this.maxMessages) {
-            this.chatMemory.removeFirst();
+        evictUntilWithinLimit();
+    }
+
+    /**
+     * 智能滑窗淘汰：在保证不破坏 OpenAI 协议配对的前提下裁到 maxMessages 以内。
+     *
+     * <p>规则（按优先级）：
+     * <ol>
+     *   <li><b>永远保留首条 SystemMessage</b>：缺它会让 messages[0] 变成 assistant/tool，多数 OpenAI 兼容端会 400</li>
+     *   <li><b>按工具轮次整体淘汰</b>：要删 {@code AiMessage(toolCalls=N)} 就必须把它后面紧跟的 N 条 ToolResult 一起删，
+     *       否则会产生 orphan ToolResult，langchain4j / OpenAI 端会因找不到对应 tool_call_id 而 400</li>
+     *   <li><b>开头是 ToolResult 也必须删</b>：会话首条不可能是 tool，必删</li>
+     * </ol>
+     *
+     * <p>极端情况：若全是 SystemMessage 撑爆 maxMessages（理论上不会），循环退出避免死循环。
+     */
+    private void evictUntilWithinLimit() {
+        int safetyGuard = this.chatMemory.size() * 2;
+        while (this.chatMemory.size() > this.maxMessages && safetyGuard-- > 0) {
+            // 拿出"待考察"的最老消息——通常就是 first，但若 first 是 system 则考察 second
+            java.util.Iterator<ChatMessage> it = this.chatMemory.iterator();
+            ChatMessage first = it.hasNext() ? it.next() : null;
+            ChatMessage candidate;
+            boolean skipSystem;
+            if (first instanceof SystemMessage && it.hasNext()) {
+                candidate = it.next();
+                skipSystem = true;
+            } else {
+                candidate = first;
+                skipSystem = false;
+            }
+            if (candidate == null) break;
+
+            // 临时摘下 SystemMessage（保留首位地位）
+            SystemMessage savedSystem = skipSystem ? (SystemMessage) this.chatMemory.pollFirst() : null;
+
+            if (candidate instanceof AiMessage am && am.hasToolExecutionRequests()) {
+                // 删整轮：AiMessage + 紧跟的 N 条 ToolResult
+                this.chatMemory.pollFirst();
+                int n = am.toolExecutionRequests().size();
+                for (int k = 0; k < n; k++) {
+                    if (this.chatMemory.peekFirst() instanceof ToolExecutionResultMessage) {
+                        this.chatMemory.pollFirst();
+                    } else break;
+                }
+            } else {
+                // 普通消息（user / ai-no-tool / 罕见的 orphan tool）直接删
+                this.chatMemory.pollFirst();
+            }
+
+            // SystemMessage 复位
+            if (savedSystem != null) {
+                this.chatMemory.addFirst(savedSystem);
+            }
         }
     }
 
@@ -648,6 +700,8 @@ public class ChatAgent {
         // 按请求顺序串行处理结果：保持 toolCall ↔ toolResult 的顺序对齐，
         // 避免 chatMemory 顺序错乱导致下一轮 LLM 请求报错。
         List<ToolExecutionResultMessage> toolResults = new ArrayList<>(requests.size());
+        int processedCount = 0;
+        try {
         for (int i = 0; i < requests.size(); i++) {
             ToolExecutionRequest request = requests.get(i);
             String result;
@@ -687,6 +741,19 @@ public class ChatAgent {
                 }
             } else {
                 saveMessage(resultMessage);
+            }
+            processedCount = i + 1;
+        }
+        } finally {
+            // 兜底：若执行中途抛异常 / 被中断（stopRegistry），把未处理的 toolCall 补占位 ToolResult。
+            // 不补的话 chatMemory 会留下 orphan AiMessage(toolCalls)，下一轮请求必 400。
+            // 占位文本明确写明"aborted"，下一轮 think 模型能感知并相应地 directAnswer。
+            for (int i = processedCount; i < requests.size(); i++) {
+                ToolExecutionRequest req = requests.get(i);
+                ToolExecutionResultMessage placeholder =
+                        ToolExecutionResultMessage.from(req, "Tool execution aborted: interrupted or error");
+                addToMemory(placeholder);
+                log.warn("[ChatAgent] execute 中断，补占位 ToolResult: idx={} tool={}", i, req.name());
             }
         }
 
