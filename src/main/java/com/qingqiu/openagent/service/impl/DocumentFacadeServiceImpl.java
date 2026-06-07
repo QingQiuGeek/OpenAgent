@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.qingqiu.openagent.converter.DocumentConverter;
 import com.qingqiu.openagent.enums.BizExceptionEnum;
 import com.qingqiu.openagent.exception.BizException;
+import com.qingqiu.openagent.mapper.ChunkBgeM3Mapper;
 import com.qingqiu.openagent.mapper.DocumentMapper;
 import com.qingqiu.openagent.mapper.KnowledgeBaseMapper;
 import com.qingqiu.openagent.model.dto.DocumentDTO;
@@ -39,6 +40,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class DocumentFacadeServiceImpl implements DocumentFacadeService {
 
     private final DocumentMapper documentMapper;
+    private final ChunkBgeM3Mapper chunkBgeM3Mapper;
     private final KnowledgeBaseMapper knowledgeBaseMapper;
     private final DocumentConverter documentConverter;
     private final DocumentStorageService documentStorageService;
@@ -102,55 +104,103 @@ public class DocumentFacadeServiceImpl implements DocumentFacadeService {
             String filetype = getFileType(originalFilename);
             long fileSize = file.getSize();
 
-            DocumentDTO documentDTO = DocumentDTO.builder()
-                    .userId(userId)
-                    .kbId(kbId)
-                    .filename(originalFilename)
-                    .filetype(filetype)
-                    .size(fileSize)
-                    .build();
+            // 计算文件内容 SHA-256 摘要，用于变更检测
+            String contentHash = cn.hutool.crypto.digest.DigestUtil.sha256Hex(file.getInputStream());
 
-            Document document = documentConverter.toEntity(documentDTO);
+            // 检查同知识库下是否已存在同名文档（支持覆盖更新）
+            LambdaQueryWrapper<Document> existQw = new LambdaQueryWrapper<>();
+            existQw.eq(Document::getKbId, kbId)
+                    .eq(Document::getFilename, originalFilename)
+                    .eq(Document::getUserId, userId)
+                    .eq(Document::getIsDeleted, 0);
+            Document existingDoc = documentMapper.selectOne(existQw);
+
             LocalDateTime now = LocalDateTime.now();
-            document.setCreatedAt(now);
-            document.setUpdatedAt(now);
-            document.setIsDeleted(0);
+            String documentId;
+            boolean isUpdate = existingDoc != null;
 
-            // 1. 先以 uploading 状态写入 DB
-            document.setStatus("uploading");
-            int rows = documentMapper.insert(document);
-            if (rows <= 0) {
-                throw new BizException(BizExceptionEnum.OPERATION_ERROR.getCode(), "创建文档记录失败");
+            // 内容 hash 变更检测：同名文件内容未变则跳过向量化
+            if (isUpdate && contentHash.equals(existingDoc.getContentHash())) {
+                log.info("文档内容未变化，跳过向量化: documentId={}, filename={}", existingDoc.getId(), originalFilename);
+                return CreateDocumentResponse.builder().documentId(existingDoc.getId()).build();
             }
 
-            String documentId = document.getId();
+            if (isUpdate) {
+                // 覆盖更新：先清理旧 chunks，再复用已有文档记录
+                documentId = existingDoc.getId();
+                int deletedChunks = chunkBgeM3Mapper.deleteByDocId(documentId);
+                log.info("覆盖更新文档，已清理旧 chunks: documentId={}, deletedChunks={}", documentId, deletedChunks);
 
-            // 2. 保存文件到 OSS / 本地
+                // 删除旧文件
+                try {
+                    DocumentDTO oldDto = documentConverter.toDTO(existingDoc);
+                    if (oldDto.getMetadata() != null && oldDto.getMetadata().getFilePath() != null) {
+                        documentStorageService.deleteFile(oldDto.getMetadata().getFilePath());
+                    }
+                } catch (Exception e) {
+                    log.warn("删除旧文件失败，继续更新: documentId={}, error={}", documentId, e.getMessage());
+                }
+
+                // 更新文档记录
+                existingDoc.setFiletype(filetype);
+                existingDoc.setSize(fileSize);
+                existingDoc.setContentHash(contentHash);
+                existingDoc.setStatus("uploading");
+                existingDoc.setErrorMsg(null);
+                existingDoc.setUpdatedAt(now);
+                documentMapper.updateById(existingDoc);
+            } else {
+                // 新建文档记录
+                DocumentDTO documentDTO = DocumentDTO.builder()
+                        .userId(userId)
+                        .kbId(kbId)
+                        .filename(originalFilename)
+                        .filetype(filetype)
+                        .size(fileSize)
+                        .build();
+
+                Document document = documentConverter.toEntity(documentDTO);
+                document.setCreatedAt(now);
+                document.setUpdatedAt(now);
+                document.setIsDeleted(0);
+                document.setContentHash(contentHash);
+                document.setStatus("uploading");
+
+                int rows = documentMapper.insert(document);
+                if (rows <= 0) {
+                    throw new BizException(BizExceptionEnum.OPERATION_ERROR.getCode(), "创建文档记录失败");
+                }
+                documentId = document.getId();
+            }
+
+            // 保存文件到 OSS / 本地
             String filePath = documentStorageService.saveFile(kbId, documentId, file);
 
-            // 3. 写入 metadata.filePath，把状态切到「向量化中」/「已完成（跳过）」
+            // 写入 metadata.filePath，把状态切到「向量化中」/「已完成（跳过）」
             DocumentDTO.MetaData metadata = new DocumentDTO.MetaData();
             metadata.setFilePath(filePath);
-            documentDTO.setMetadata(metadata);
-            documentDTO.setId(documentId);
-            documentDTO.setCreatedAt(now);
-            documentDTO.setUpdatedAt(LocalDateTime.now());
 
-            // 知识库 enum 已剔除图片，所以默认全部走向量化；图片或不识别仍兜底跳过
             boolean isImage = isImageType(filetype);
             boolean needVectorize = !isImage;
-            documentDTO.setStatus(needVectorize ? "vectorizing" : "skipped");
 
-            Document updatedDocument = documentConverter.toEntity(documentDTO);
-            updatedDocument.setId(documentId);
-            updatedDocument.setCreatedAt(now);
-            updatedDocument.setUpdatedAt(LocalDateTime.now());
-            documentMapper.updateById(updatedDocument);
+            Document statusUpdate = new Document();
+            statusUpdate.setId(documentId);
+            statusUpdate.setStatus(needVectorize ? "vectorizing" : "skipped");
+            statusUpdate.setUpdatedAt(LocalDateTime.now());
+            // 通过 metadata JSON 字符串写入 filePath
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+                statusUpdate.setMetadata(om.writeValueAsString(metadata));
+            } catch (Exception e) {
+                log.warn("序列化 metadata 失败: {}", e.getMessage());
+            }
+            documentMapper.updateById(statusUpdate);
 
-            log.info("文档上传成功: userId={}, kbId={}, documentId={}, filename={}, status={}",
-                    userId, kbId, documentId, originalFilename, updatedDocument.getStatus());
+            log.info("文档{}成功: userId={}, kbId={}, documentId={}, filename={}, status={}",
+                    isUpdate ? "覆盖更新" : "上传", userId, kbId, documentId, originalFilename,
+                    needVectorize ? "vectorizing" : "skipped");
 
-            // 4. 异步向量化（md 走标题切段，其他走 Tika + 弹性分段），失败回写状态
+            // 异步向量化（md 走标题切段，其他走 Tika + 弹性分段），失败回写状态
             if (needVectorize) {
                 documentVectorizationService.processAsync(kbId, documentId, filePath, filetype);
             } else {
@@ -176,6 +226,9 @@ public class DocumentFacadeServiceImpl implements DocumentFacadeService {
         } catch (Exception e) {
             log.warn("删除文件失败，继续删除文档记录: documentId={}, error={}", documentId, e.getMessage());
         }
+        // 清理该文档对应的所有 chunks，避免"僵尸数据"污染检索结果
+        int deletedChunks = chunkBgeM3Mapper.deleteByDocId(documentId);
+        log.info("已清理文档关联 chunks: documentId={}, deletedChunks={}", documentId, deletedChunks);
         int rows = documentMapper.deleteById(documentId);
         if (rows <= 0) {
             throw new BizException(BizExceptionEnum.OPERATION_ERROR.getCode(), "删除文档失败");

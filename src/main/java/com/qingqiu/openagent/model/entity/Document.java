@@ -40,6 +40,9 @@ public class Document {
     /** JSON String */
     private String metadata;
 
+    /** 文档内容 SHA-256 摘要，用于变更检测 */
+    private String contentHash;
+
     /** 文档处理状态：uploading / vectorizing / done / failed / skipped */
     private String status;
 
@@ -71,6 +74,7 @@ public class Document {
             && (this.getFiletype() == null ? other.getFiletype() == null : this.getFiletype().equals(other.getFiletype()))
             && (this.getSize() == null ? other.getSize() == null : this.getSize().equals(other.getSize()))
             && (this.getMetadata() == null ? other.getMetadata() == null : this.getMetadata().equals(other.getMetadata()))
+            && (this.getContentHash() == null ? other.getContentHash() == null : this.getContentHash().equals(other.getContentHash()))
             && (this.getCreatedAt() == null ? other.getCreatedAt() == null : this.getCreatedAt().equals(other.getCreatedAt()))
             && (this.getUpdatedAt() == null ? other.getUpdatedAt() == null : this.getUpdatedAt().equals(other.getUpdatedAt()));
     }
@@ -85,6 +89,7 @@ public class Document {
         result = prime * result + ((getFiletype() == null) ? 0 : getFiletype().hashCode());
         result = prime * result + ((getSize() == null) ? 0 : getSize().hashCode());
         result = prime * result + ((getMetadata() == null) ? 0 : getMetadata().hashCode());
+        result = prime * result + ((getContentHash() == null) ? 0 : getContentHash().hashCode());
         result = prime * result + ((getCreatedAt() == null) ? 0 : getCreatedAt().hashCode());
         result = prime * result + ((getUpdatedAt() == null) ? 0 : getUpdatedAt().hashCode());
         return result;

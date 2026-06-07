@@ -16,6 +16,16 @@ import java.util.regex.Pattern;
  *   2. 段落超过 maxChars 时退化按句子（中英文标点）切；
  *   3. 句子仍超长则按定长滑动窗口切（带 overlap 保留上下文）；
  *   4. 短段落贪心合并到接近 maxChars，避免 chunk 过碎。
+ *
+ * TODO: 1. 当前所有非 Markdown 文档共用同一套切分策略，后续应按文档类型定制：
+ *          - PDF：优先按页面边界切分，保留页码信息
+ *          - 代码文件（.java/.py/.js）：按函数/类/方法边界切分，保留语义完整性
+ *          - Excel/CSV：按行组切分，保留表头作为上下文前缀
+ *          - 长文本：当前策略基本够用，可微调 maxChars/overlap 参数
+ *       2. 抽象 ChunkStrategy 接口（如 List<String> chunk(String text, ChunkContext ctx)），
+ *          TextChunker 退化为默认实现，由 DocumentVectorizationService 按 filetype 选择策略。
+ *       3. overlap 目前是固定 80 字符，可考虑按语义边界（句子开头）对齐重叠区域，
+ *          避免在句子中间截断导致语义碎片化。
  */
 @Service
 public class TextChunker {

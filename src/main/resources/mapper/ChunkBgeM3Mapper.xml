@@ -31,4 +31,17 @@
         LIMIT #{limit}
         ]]>
     </select>
+
+    <delete id="deleteByDocId">
+        DELETE FROM chunk_bge_m3 WHERE doc_id = #{docId}
+    </delete>
+
+    <insert id="batchInsert">
+        INSERT INTO chunk_bge_m3 (id, kb_id, doc_id, content, metadata, embedding, created_at, updated_at)
+        VALUES
+        <foreach collection="chunks" item="c" separator=",">
+            (#{c.id}, #{c.kbId}, #{c.docId}, #{c.content}, #{c.metadata},
+             #{c.embedding}::vector, #{c.createdAt}, #{c.updatedAt})
+        </foreach>
+    </insert>
 </mapper>

@@ -14,7 +14,8 @@ import java.io.InputStream;
  */
 @Service
 public class TikaTextExtractor {
-
+//TODO: 1. Tika 默认 100KB 字符上限，调大避免长文档被截断。
+// chunk 元数据里记录原文长度，超过上限时提示用户上传更小的文档或使用分块上传。
     /** Tika 默认 100KB 字符上限，调大避免长文档被截断。 */
     private static final int MAX_CHARS = 5_000_000;
 

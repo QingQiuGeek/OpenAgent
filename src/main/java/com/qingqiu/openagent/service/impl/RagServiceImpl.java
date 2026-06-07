@@ -4,10 +4,12 @@ import com.qingqiu.openagent.mapper.ChunkBgeM3Mapper;
 import com.qingqiu.openagent.model.entity.ChunkBgeM3;
 import com.qingqiu.openagent.service.RagService;
 import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -44,6 +46,26 @@ public class RagServiceImpl implements RagService {
     @Override
     public float[] embed(String text) {
         return doEmbed(text);
+    }
+
+    /** DashScope text-embedding-v3 单次批量上限 */
+    private static final int BATCH_SIZE = 10;
+
+    @Override
+    public List<float[]> batchEmbed(List<String> texts) {
+        if (texts == null || texts.isEmpty()) return List.of();
+
+        List<float[]> allEmbeddings = new ArrayList<>();
+        // 按 BATCH_SIZE 分批调用
+        for (int i = 0; i < texts.size(); i += BATCH_SIZE) {
+            int end = Math.min(i + BATCH_SIZE, texts.size());
+            List<TextSegment> batch = texts.subList(i, end).stream()
+                    .map(TextSegment::from)
+                    .toList();
+            List<Embedding> batchResult = embeddingModel.embedAll(batch).content();
+            batchResult.forEach(e -> allEmbeddings.add(e.vector()));
+        }
+        return allEmbeddings;
     }
 
     /**

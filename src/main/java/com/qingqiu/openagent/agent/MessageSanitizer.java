@@ -25,6 +25,19 @@ import java.util.List;
  *
  * <p>常见的"破损来源"：会话首条消息被滑窗淘汰、MAX_STEPS 兜底退出导致最后一轮工具结果缺失、
  * loadMemory 从 DB 边界恢复时切到一半的工具轮次。
+ *https://mp.weixin.qq.com/s/9FVBngl6E36sAiZgtbdP_A
+ * TODO: 滑动窗口（evictUntilWithinLimit）因 AiMessage 与 ToolExecutionResultMessage 配对关系导致的问题：
+ *       1. 问题根因：滑窗按消息条数淘汰，但一条 AiMessage(toolCalls=N) 逻辑上关联 N 条 ToolResult，
+ *          淘汰时必须整组删除，否则产生 orphan（孤立的 ToolResult 或缺少 ToolResult 的 AiMessage）。
+ *       2. 当前解决方案：evictUntilWithinLimit 中按工具轮次整体淘汰，MessageSanitizer 二次兜底清洗。
+ *       3. 后续优化方向：
+ *          a) 将滑窗的淘汰单位从"单条消息"改为"逻辑轮次"（一个 user→ai→tool→ai 完整交互算一轮），
+ *             从根本上避免配对断裂；
+ *          b) MAX_STEPS 退出时，若最后一步 AiMessage 带 toolCalls 但未执行，
+ *             应在退出前补全 ToolExecutionResultMessage 占位（而非依赖 MessageSanitizer 丢弃），
+ *             这样即使中间轮次被裁剪也不会产生 orphan；
+ *          c) DB 恢复时 loadMemory 按 toolCall.id 与 toolResult.id 严格配对校验，
+ *             而非仅靠数量对齐，提升边界恢复的健壮性。
  */
 @Slf4j
 public final class MessageSanitizer {

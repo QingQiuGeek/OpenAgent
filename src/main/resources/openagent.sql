@@ -195,18 +195,19 @@ CREATE TABLE knowledge_base (
 CREATE INDEX idx_kb_user_updated ON knowledge_base (user_id, updated_at DESC);
 
 CREATE TABLE document (
-    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id    BIGINT NOT NULL,                                  -- 所属用户（冗余，便于查询过滤）
-    kb_id      UUID NOT NULL REFERENCES knowledge_base(id) ON DELETE CASCADE,
-    filename   TEXT NOT NULL,
-    filetype   TEXT,                                             -- pdf / md / txt 等
-    size       BIGINT,                                           -- 文件大小
-    metadata   JSONB,                                            -- 页数、上传方式、解析参数等
-    status     TEXT NOT NULL DEFAULT 'uploading',                 -- uploading / vectorizing / done / failed / skipped
-    error_msg  TEXT,                                              -- 失败时记录原因
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    is_deleted INT NOT NULL DEFAULT 0
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      BIGINT NOT NULL,                                  -- 所属用户（冗余，便于查询过滤）
+    kb_id        UUID NOT NULL REFERENCES knowledge_base(id) ON DELETE CASCADE,
+    filename     TEXT NOT NULL,
+    filetype     TEXT,                                             -- pdf / md / txt 等
+    size         BIGINT,                                           -- 文件大小
+    metadata     JSONB,                                            -- 页数、上传方式、解析参数等
+    content_hash VARCHAR(64),                                      -- 文档内容 SHA-256 摘要，用于变更检测
+    status       TEXT NOT NULL DEFAULT 'uploading',                 -- uploading / vectorizing / done / failed / skipped
+    error_msg    TEXT,                                              -- 失败时记录原因
+    created_at   TIMESTAMP DEFAULT NOW(),
+    updated_at   TIMESTAMP DEFAULT NOW(),
+    is_deleted   INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE chunk_bge_m3 (

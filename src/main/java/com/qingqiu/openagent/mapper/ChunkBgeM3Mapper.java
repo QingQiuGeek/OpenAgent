@@ -20,4 +20,14 @@ public interface ChunkBgeM3Mapper extends BaseMapper<ChunkBgeM3> {
             @Param("vectorLiteral") String vectorLiteral,
             @Param("limit") int limit
     );
+
+    /**
+     * 按 docId 物理删除该文档的所有 chunks（用于文档删除/重建场景）
+     */
+    int deleteByDocId(@Param("docId") String docId);
+
+    /**
+     * 批量插入 chunks
+     */
+    int batchInsert(@Param("chunks") List<ChunkBgeM3> chunks);
 }

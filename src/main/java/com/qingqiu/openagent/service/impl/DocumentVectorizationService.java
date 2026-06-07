@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -29,6 +30,11 @@ import java.util.List;
  *   - 其他文档（pdf/docx/xlsx/code/txt …）→ TikaTextExtractor 提取纯文本 + TextChunker 弹性分段
  *
  * 入向量库的字段：chunk_bge_m3(kb_id, doc_id, content, embedding VECTOR(1024))
+ *
+ * TODO: 1. metadata 字段当前写入 null，后续应记录 chunk 元数据（文档文件名、文件类型、
+ *          chunk 在原文中的页码/段落序号、切分层级等），便于检索后的引用溯源。
+ *       2. 不同格式文档应制定不同的切块策略（如 PDF 按页、代码按函数/类、表格按行），
+ *          抽象 ChunkStrategy 接口，通过工厂按 filetype 分发，替换当前 if-else 硬编码。
  */
 @Service
 @AllArgsConstructor
@@ -64,7 +70,7 @@ public class DocumentVectorizationService {
         }
     }
 
-    /** Markdown：按标题层级切段，每段 title 做 embedding，正文存 content。 */
+    /** Markdown：按标题层级切段，批量 embedding，批量入库。 */
     private int doProcessMarkdown(String kbId, String documentId, String filePath) throws Exception {
         log.info("开始处理 Markdown 文档: kbId={}, documentId={}", kbId, documentId);
         Path path = documentStorageService.getFilePath(filePath);
@@ -75,33 +81,47 @@ public class DocumentVectorizationService {
                 log.warn("Markdown 文档解析后没有任何章节: documentId={}", documentId);
                 return 0;
             }
+
+            // 过滤有效章节，收集标题用于批量 embedding
+            List<MarkdownParserService.MarkdownSection> validSections = sections.stream()
+                    .filter(s -> s.getTitle() != null && !s.getTitle().trim().isEmpty())
+                    .toList();
+            if (validSections.isEmpty()) {
+                log.warn("Markdown 文档没有有效章节: documentId={}", documentId);
+                return 0;
+            }
+
+            List<String> titles = validSections.stream()
+                    .map(MarkdownParserService.MarkdownSection::getTitle)
+                    .toList();
+
+            // 批量 Embedding
+            List<float[]> embeddings = ragService.batchEmbed(titles);
+
+            // 构建 chunk 实体列表
             LocalDateTime now = LocalDateTime.now();
-            int chunkCount = 0;
-            for (MarkdownParserService.MarkdownSection section : sections) {
-                String title = section.getTitle();
+            List<ChunkBgeM3> chunkEntities = new ArrayList<>();
+            for (int i = 0; i < validSections.size(); i++) {
+                MarkdownParserService.MarkdownSection section = validSections.get(i);
                 String content = section.getContent();
-                if (title == null || title.trim().isEmpty()) {
-                    continue;
-                }
-                float[] embedding = ragService.embed(title);
-                ChunkBgeM3 chunk = ChunkBgeM3.builder()
+                chunkEntities.add(ChunkBgeM3.builder()
                         .kbId(kbId)
                         .docId(documentId)
                         .content(content != null ? content : "")
-                        .metadata(null)
-                        .embedding(embedding)
+                        .embedding(embeddings.get(i))
                         .createdAt(now)
                         .updatedAt(now)
-                        .build();
-                if (chunkBgeM3Mapper.insert(chunk) > 0) {
-                    chunkCount++;
-                }
+                        .build());
             }
-            return chunkCount;
+
+            // 批量插入
+            int inserted = chunkBgeM3Mapper.batchInsert(chunkEntities);
+            log.info("批量插入 Markdown chunks: documentId={}, count={}", documentId, inserted);
+            return inserted;
         }
     }
 
-    /** 通用文档：Tika 提取文本 → 弹性分段 → 每段 chunk 做 embedding 入库。 */
+    /** 通用文档：Tika 提取文本 → 弹性分段 → 批量 embedding → 批量入库。 */
     private int doProcessGeneric(String kbId, String documentId, String filePath) throws Exception {
         log.info("开始处理通用文档: kbId={}, documentId={}, filePath={}", kbId, documentId, filePath);
         Path path = documentStorageService.getFilePath(filePath);
@@ -113,30 +133,35 @@ public class DocumentVectorizationService {
             log.warn("文档抽取后内容为空: documentId={}", documentId);
             return 0;
         }
-        List<String> chunks = textChunker.chunk(text);
+        List<String> chunks = textChunker.chunk(text).stream()
+                .filter(t -> t != null && !t.isBlank())
+                .toList();
         if (chunks.isEmpty()) {
             log.warn("分段后没有任何 chunk: documentId={}", documentId);
             return 0;
         }
+
+        // 批量 Embedding（内部自动分批，每批 ≤10 条）
+        List<float[]> embeddings = ragService.batchEmbed(chunks);
+
+        // 构建 chunk 实体列表
         LocalDateTime now = LocalDateTime.now();
-        int chunkCount = 0;
-        for (String content : chunks) {
-            if (content == null || content.isBlank()) continue;
-            float[] embedding = ragService.embed(content);
-            ChunkBgeM3 chunk = ChunkBgeM3.builder()
+        List<ChunkBgeM3> chunkEntities = new ArrayList<>();
+        for (int i = 0; i < chunks.size(); i++) {
+            chunkEntities.add(ChunkBgeM3.builder()
                     .kbId(kbId)
                     .docId(documentId)
-                    .content(content)
-                    .metadata(null)
-                    .embedding(embedding)
+                    .content(chunks.get(i))
+                    .embedding(embeddings.get(i))
                     .createdAt(now)
                     .updatedAt(now)
-                    .build();
-            if (chunkBgeM3Mapper.insert(chunk) > 0) {
-                chunkCount++;
-            }
+                    .build());
         }
-        return chunkCount;
+
+        // 批量插入
+        int inserted = chunkBgeM3Mapper.batchInsert(chunkEntities);
+        log.info("批量插入 chunks: documentId={}, count={}", documentId, inserted);
+        return inserted;
     }
 
     private void updateStatus(String documentId, String status, String errorMsg) {
