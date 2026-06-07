@@ -13,23 +13,24 @@
 
 ## ✨ 核心亮点
 
-| # | 亮点 | 说明 |
-|---|---|---|
-| 1 | **真正的 Agent Loop**（ReAct / Think-Execute） | 自实现多轮 think→execute 状态机，**禁用** LangChain4j 框架自动 ToolCalling，由后端完全掌控每一步，便于可观测与中断 |
-| 2 | **工具系统统一抽象** | 内置工具 + 用户自定义工具 + **MCP 协议工具**统一注册到一个 `LangChainToolExecutor`；同一轮多工具调用并行执行 |
-| 3 | **RAG 知识库（PostgreSQL + pgvector）** | 多格式文档（pdf/docx/md/txt/html…）→ Tika 解析 → 智能分块 → embedding 落库 → 向量召回 → 引用回填 |
-| 4 | **MCP 协议接入** | 支持配置外部 MCP Server，模型可像调本地工具一样调用 |
-| 5 | **多模型动态切换** | 模型表 + 注册表模式，每个智能体可独立绑定 DeepSeek / 通义 / 智谱 / OpenAI 兼容端点 |
-| 6 | **SSE 流式输出 + 心跳保活** | Token 级流式渲染、状态实时推送（PLANNING/THINKING/EXECUTING/DONE/ERROR），15s 心跳防代理断连 |
-| 7 | **可观测** | 用量计费、消息引用来源、敏感词输入护栏、自动重试、异常 toast |
+| #   | 亮点                                           | 说明                                                                                                               |
+| --- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 1   | **真正的 Agent Loop**（ReAct / Think-Execute） | 自实现多轮 think→execute 状态机，**禁用** LangChain4j 框架自动 ToolCalling，由后端完全掌控每一步，便于可观测与中断 |
+| 2   | **工具系统统一抽象**                           | 内置工具 + 用户自定义工具 + **MCP 协议工具**统一注册到一个 `LangChainToolExecutor`；同一轮多工具调用并行执行       |
+| 3   | **RAG 知识库（PostgreSQL + pgvector）**        | 多格式文档（pdf/docx/md/txt/html…）→ Tika 解析 → 智能分块 → embedding 落库 → 向量召回 → 引用回填                   |
+| 4   | **MCP 协议接入**                               | 支持配置外部 MCP Server，模型可像调本地工具一样调用                                                                |
+| 5   | **多模型动态切换**                             | 模型表 + 注册表模式，每个智能体可独立绑定 DeepSeek / 通义 / 智谱 / OpenAI 兼容端点                                 |
+| 6   | **SSE 流式输出 + 心跳保活**                    | Token 级流式渲染、状态实时推送（PLANNING/THINKING/EXECUTING/DONE/ERROR），15s 心跳防代理断连                       |
+| 7   | **可观测**                                     | 用量计费、消息引用来源、敏感词输入护栏、自动重试、异常 toast                                                       |
 
 ---
 
 ## 🛠️ 技术栈
 
 ### 后端
+
 - **Spring Boot 3.5.8** · **Java 17**
-- **LangChain4j 1.1**（自定义 Agent Loop，未走框架自动模式）
+- **LangChain4j 1.9**（自定义 Agent Loop，未走框架自动模式）
 - **Sa-Token** 认证（双 Token + Redis 持久化）
 - **MyBatis-Plus 3.5** + **PostgreSQL 16** + **pgvector**（向量检索）
 - **Redis** 会话 / 限流 / 缓存
@@ -39,6 +40,7 @@
 - **MCP**（Model Context Protocol）外部工具协议
 
 ### 前端
+
 - **React 19** + **TypeScript 5.9** + **Vite (Rolldown)**
 - **Ant Design 6** + **@ant-design/x** + **@ant-design/x-markdown**
 - **TailwindCSS 4** · **Highlight.js** · **Mermaid** 图表
@@ -93,7 +95,7 @@
 - 每个 `@Tool` 方法运行时被反射注册到 `invokerByToolName`，参数支持 `@P` 描述自动写入 JSON Schema
 - 同一轮 multi-tool call 走 `CompletableFuture` 并行，按请求顺序回填结果，**不会破坏 toolCall ↔ toolResult 配对**
 
-![工具配置](./asset/tool.png)
+![工具配置](./asset/添加智能体助手-工具调用.png)
 
 ### 3. RAG 知识库
 
@@ -102,8 +104,8 @@
 文档处理链路：
 
 ```
-上传 → OSS 持久化 → Tika 解析 → TextChunker 分块 → 
-Embedding 模型向量化 → PostgreSQL + pgvector 落库 → 
+上传 → OSS 持久化 → Tika 解析 → TextChunker 分块 →
+Embedding 模型向量化 → PostgreSQL + pgvector 落库 →
 ivfflat 索引（10w+ 向量秒级召回）
 ```
 
@@ -122,11 +124,11 @@ ivfflat 索引（10w+ 向量秒级召回）
 3. 把规格合并进当前 agent 的 toolSpecs，**模型完全无感知**
 4. 命中调用时自动 `client.executeTool(req)` 转发
 
-![MCP 配置](./asset/mcp.png)
+![MCP 配置](./asset/添加智能体助手-mcp工具.png)
 
-![测试 MCP](./asset/testmcp.png)
+![测试 MCP](./asset/mcp连接测试.png)
 
-![MCP 列表](./asset/mcplist.png)
+![MCP 列表](./asset/我的mcp服务器.png)
 
 ### 5. 文件理解
 
@@ -150,13 +152,13 @@ ivfflat 索引（10w+ 向量秒级召回）
 
 后台可添加 OpenAI 兼容端点（DeepSeek / 通义 / 智谱 / 自部署 Ollama 等），并按 agent 绑定。
 
-![自定义添加模型](./asset/自定义添加模型.png)
+![自定义添加模型](./asset/添加智能体助手-模型设置.png)
 
 ### 9. 智能体管理 + 会话分享
 
 每个用户可创建多个 agent，配置 systemPrompt、模型、工具、知识库、MCP；会话支持分享只读链接。
 
-![创建智能体](./asset/agent添加.png)
+![创建智能体](./asset/添加智能体助手-基础设置.png)
 ![会话分享](./asset/会话分享.png)
 
 ### 10. 用量统计
@@ -164,7 +166,7 @@ ivfflat 索引（10w+ 向量秒级召回）
 按用户 × 模型粒度统计 token / 调用次数，提供可视化看板。
 
 ![我的模型用量](./asset/我的模型用量.png)
-![模型用量明细](./asset/我的模型用量2.png)
+![模型用量明细](./asset/我的模型用量调用明细.png)
 
 ### 11. 消息反馈 / 编辑 / 重试
 
@@ -176,14 +178,14 @@ ivfflat 索引（10w+ 向量秒级召回）
 
 ## 🔒 稳定性与生产级细节
 
-| 维度 | 实现 |
-|---|---|
+| 维度               | 实现                                                                                                                 |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | **敏感词输入护栏** | 自定义 `InputGuardrail`，子串包含匹配；用 `PathMatchingResourcePatternResolver` 加载 classpath 词库（兼容 jar 部署） |
-| **流式抖动重试** | `streamChat` 对 `Connection reset` / `SocketTimeout` 指数退避重试 2 次 |
-| **SSE 心跳** | 后端每 15s `:hb` 注释行，防 Nginx / 浏览器 idle 超时 |
-| **异常友好提示** | Agent 运行失败 → SSE 推 `AI_ERROR` 类型 → 前端 toast，避免静默卡死 |
-| **Token 续签** | sa-token `auto-renew` + `active-timeout 3h` + `timeout 7d`，活跃用户无感续期 |
-| **用户操作可中断** | StopRegistry：用户可一键停止正在运行的 Agent |
+| **流式抖动重试**   | `streamChat` 对 `Connection reset` / `SocketTimeout` 指数退避重试 2 次                                               |
+| **SSE 心跳**       | 后端每 15s `:hb` 注释行，防 Nginx / 浏览器 idle 超时                                                                 |
+| **异常友好提示**   | Agent 运行失败 → SSE 推 `AI_ERROR` 类型 → 前端 toast，避免静默卡死                                                   |
+| **Token 续签**     | sa-token `auto-renew` + `active-timeout 3h` + `timeout 7d`，活跃用户无感续期                                         |
+| **用户操作可中断** | StopRegistry：用户可一键停止正在运行的 Agent                                                                         |
 
 ---
 
@@ -196,6 +198,7 @@ ivfflat 索引（10w+ 向量秒级召回）
 ### 方式一：本地启动（开发）
 
 #### 环境依赖
+
 - JDK 17 + Maven 3.9+
 - Node.js 20+
 - npm
@@ -224,22 +227,26 @@ ivfflat 索引（10w+ 向量秒级召回）
 ### 方式二：Docker Compose 一键部署（推荐）
 
 #### 环境依赖
+
 - Docker 24+ · Docker Compose v2
 
 #### 步骤
 
 1. **配置环境变量**：
+
    ```bash
    cp .env.example .env
    vim .env   # 填入数据库密码、LLM Key、前端端口
    ```
 
 2. **一键启动**（首次会自动建表 + 启用 pgvector）：
+
    ```bash
    docker compose up -d --build
    ```
 
 3. **查看状态 / 日志**：
+
    ```bash
    docker compose ps
    docker compose logs -f backend
@@ -308,4 +315,3 @@ OpenAgent/
 ## 📜 License
 
 毕业设计项目 · 仅供学习交流
-
